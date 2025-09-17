@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Test - Palm Oil System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold mb-8">API Test - Palm Oil Management System</h1>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Login Test -->
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4">1. Login Test</h2>
+                <button id="loginBtn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                    Test Login
+                </button>
+                <div id="loginResult" class="mt-4 p-3 bg-gray-50 rounded text-sm"></div>
+            </div>
+
+            <!-- Fertilizer API Test -->
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4">2. Fertilizer API Test</h2>
+                <button id="fertilizerBtn" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600" disabled>
+                    Test Fertilizer API
+                </button>
+                <div id="fertilizerResult" class="mt-4 p-3 bg-gray-50 rounded text-sm max-h-60 overflow-y-auto"></div>
+            </div>
+
+            <!-- Harvest API Test -->
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4">3. Harvest API Test</h2>
+                <button id="harvestBtn" class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600" disabled>
+                    Test Harvest API
+                </button>
+                <div id="harvestResult" class="mt-4 p-3 bg-gray-50 rounded text-sm max-h-60 overflow-y-auto"></div>
+            </div>
+
+            <!-- Stats API Test -->
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4">4. Stats API Test</h2>
+                <button id="statsBtn" class="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600" disabled>
+                    Test Stats API
+                </button>
+                <div id="statsResult" class="mt-4 p-3 bg-gray-50 rounded text-sm max-h-60 overflow-y-auto"></div>
+            </div>
+        </div>
+
+        <!-- Status -->
+        <div class="mt-8 bg-white p-6 rounded-lg shadow-md">
+            <h2 class="text-xl font-semibold mb-4">Status</h2>
+            <div id="status" class="text-sm text-gray-600">
+                Ready to test APIs...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let authToken = null;
+
+        // Login test
+        document.getElementById('loginBtn').addEventListener('click', async () => {
+            const resultDiv = document.getElementById('loginResult');
+            resultDiv.innerHTML = 'Testing login...';
+
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: 'admin@palmoil.com',
+                        password: 'admin123'
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    authToken = data.token;
+                    resultDiv.innerHTML = `<div class="text-green-600">✅ Login successful!</div>
+                        <div class="text-sm mt-2">Token: ${data.token.substring(0, 20)}...</div>
+                        <div class="text-sm">User: ${data.user.email} (${data.user.role})</div>`;
+
+                    // Enable other test buttons
+                    document.getElementById('fertilizerBtn').disabled = false;
+                    document.getElementById('harvestBtn').disabled = false;
+                    document.getElementById('statsBtn').disabled = false;
+                } else {
+                    const error = await response.json();
+                    resultDiv.innerHTML = `<div class="text-red-600">❌ Login failed: ${error.error}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="text-red-600">❌ Error: ${error.message}</div>`;
+            }
+        });
+
+        // Fertilizer API test
+        document.getElementById('fertilizerBtn').addEventListener('click', async () => {
+            const resultDiv = document.getElementById('fertilizerResult');
+            resultDiv.innerHTML = 'Testing fertilizer API...';
+
+            try {
+                const response = await fetch('/api/fertilizer', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `<div class="text-green-600">✅ Fertilizer API successful!</div>
+                        <div class="text-sm mt-2">Found ${data.length} records:</div>
+                        <div class="mt-2 space-y-1">`;
+
+                    data.slice(0, 5).forEach((record, i) => {
+                        resultDiv.innerHTML += `<div class="text-xs bg-gray-100 p-2 rounded">
+                            ${i+1}. ${record.date}: ${record.fertilizer_type} - ${record.amount} bags × ${record.cost_per_bag} THB
+                        </div>`;
+                    });
+
+                    if (data.length > 5) {
+                        resultDiv.innerHTML += `<div class="text-xs text-gray-500 mt-2">... and ${data.length - 5} more records</div>`;
+                    }
+
+                    resultDiv.innerHTML += '</div>';
+                } else {
+                    const error = await response.json();
+                    resultDiv.innerHTML = `<div class="text-red-600">❌ Fertilizer API failed: ${error.error}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="text-red-600">❌ Error: ${error.message}</div>`;
+            }
+        });
+
+        // Harvest API test
+        document.getElementById('harvestBtn').addEventListener('click', async () => {
+            const resultDiv = document.getElementById('harvestResult');
+            resultDiv.innerHTML = 'Testing harvest API...';
+
+            try {
+                const response = await fetch('/api/harvest', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `<div class="text-green-600">✅ Harvest API successful!</div>
+                        <div class="text-sm mt-2">Found ${data.length} records:</div>
+                        <div class="mt-2 space-y-1">`;
+
+                    data.slice(0, 3).forEach((record, i) => {
+                        resultDiv.innerHTML += `<div class="text-xs bg-gray-100 p-2 rounded">
+                            ${i+1}. ${record.date}: ${record.total_weight}kg × ${record.price_per_kg} THB = ${record.total_revenue?.toLocaleString()} THB
+                        </div>`;
+                    });
+
+                    if (data.length > 3) {
+                        resultDiv.innerHTML += `<div class="text-xs text-gray-500 mt-2">... and ${data.length - 3} more records</div>`;
+                    }
+
+                    resultDiv.innerHTML += '</div>';
+                } else {
+                    const error = await response.json();
+                    resultDiv.innerHTML = `<div class="text-red-600">❌ Harvest API failed: ${error.error}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="text-red-600">❌ Error: ${error.message}</div>`;
+            }
+        });
+
+        // Stats API test
+        document.getElementById('statsBtn').addEventListener('click', async () => {
+            const resultDiv = document.getElementById('statsResult');
+            resultDiv.innerHTML = 'Testing stats API...';
+
+            try {
+                const response = await fetch('/api/stats', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `<div class="text-green-600">✅ Stats API successful!</div>
+                        <div class="mt-2 space-y-2 text-sm">`;
+
+                    if (data.harvest) {
+                        resultDiv.innerHTML += `<div class="bg-blue-50 p-2 rounded">
+                            <strong>Harvest:</strong> ${data.harvest.count} records, Revenue: ${data.harvest.revenue?.toLocaleString()} THB, Profit: ${data.harvest.profit?.toLocaleString()} THB
+                        </div>`;
+                    }
+
+                    if (data.fertilizer) {
+                        resultDiv.innerHTML += `<div class="bg-green-50 p-2 rounded">
+                            <strong>Fertilizer:</strong> ${data.fertilizer.count} records, Total cost: ${data.fertilizer.cost?.toLocaleString()} THB
+                        </div>`;
+                    }
+
+                    if (data.palmtrees) {
+                        resultDiv.innerHTML += `<div class="bg-yellow-50 p-2 rounded">
+                            <strong>Palm Trees:</strong> ${data.palmtrees.count} unique trees
+                        </div>`;
+                    }
+
+                    resultDiv.innerHTML += '</div>';
+                } else {
+                    const error = await response.json();
+                    resultDiv.innerHTML = `<div class="text-red-600">❌ Stats API failed: ${error.error}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="text-red-600">❌ Error: ${error.message}</div>`;
+            }
+        });
+
+        // Update status
+        setInterval(() => {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = `Server: ${authToken ? 'Connected' : 'Waiting for login'} | Token: ${authToken ? 'Available' : 'None'}`;
+        }, 1000);
+    </script>
+</body>
+</html>

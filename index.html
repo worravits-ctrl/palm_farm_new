@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Palm Oil Business Manager</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React และ ReactDOM CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Babel Standalone สำหรับ JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+                'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+                sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <!-- โหลดและรัน JSX Component -->
+    <script type="text/babel" src="./Qwen_jsx_20250912_y4d6679zr.jsx"></script>
+    
+    <!-- Render แอป -->
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        
+        // ตรวจสอบว่า App component โหลดแล้วหรือไม่
+        if (typeof App !== 'undefined') {
+            const root = ReactDOM.createRoot(document.getElementById('root'));
+            root.render(<App />);
+        } else {
+            console.error('App component not found');
+        }
+    </script>
+</body>
+</html>
