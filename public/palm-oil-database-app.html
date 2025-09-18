@@ -50,6 +50,35 @@
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
         }
+        
+        /* Mobile optimizations for voice chat */
+        @media (max-width: 640px) {
+            .chat-input-mobile {
+                font-size: 16px; /* Prevent zoom on iOS */
+            }
+            
+            .voice-button {
+                touch-action: manipulation; /* Better touch response */
+                min-height: 44px; /* iOS recommended touch target size */
+                min-width: 44px;
+            }
+            
+            .chat-message {
+                word-wrap: break-word;
+                overflow-wrap: break-word;
+            }
+        }
+        
+        /* Voice recording animation */
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        
+        .recording-pulse {
+            animation: pulse 2s infinite;
+        }
     </style>
 </head>
 <body>
@@ -268,6 +297,12 @@
           const [geminiLoading, setGeminiLoading] = useState(false);
           const [geminiStatus, setGeminiStatus] = useState('unknown'); // 'ready', 'unavailable', 'unknown'
           const [loading, setLoading] = useState(false);
+          
+          // Voice-related states
+          const [isListening, setIsListening] = useState(false);
+          const [isSpeaking, setIsSpeaking] = useState(false);
+          const [voiceSupported, setVoiceSupported] = useState(false);
+          const [speechRecognition, setSpeechRecognition] = useState(null);
 
           // Data states
           const [harvestData, setHarvestData] = useState([]);
@@ -302,7 +337,92 @@
             
             // Check API status on startup
             checkApiStatus();
+            
+            // Initialize voice features
+            initializeVoiceFeatures();
           }, []);
+          
+          // Initialize voice features
+          const initializeVoiceFeatures = () => {
+            // Check for Speech Recognition support
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            const speechSynthesis = window.speechSynthesis;
+            
+            if (SpeechRecognition && speechSynthesis) {
+              setVoiceSupported(true);
+              
+              const recognition = new SpeechRecognition();
+              recognition.continuous = false;
+              recognition.interimResults = false;
+              recognition.lang = 'th-TH'; // Thai language
+              
+              recognition.onstart = () => {
+                console.log('🎤 Voice recognition started');
+                setIsListening(true);
+              };
+              
+              recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                console.log('🗣️ Voice input:', transcript);
+                setGeminiInput(transcript);
+                setIsListening(false);
+                
+                // Auto-send after voice input (for hands-free operation)
+                setTimeout(() => {
+                  if (transcript.trim()) {
+                    const fakeEvent = { preventDefault: () => {} };
+                    handleGeminiSend(fakeEvent);
+                  }
+                }, 1000);
+              };
+              
+              recognition.onerror = (event) => {
+                console.error('❌ Voice recognition error:', event.error);
+                setIsListening(false);
+                
+                let errorMessage = '';
+                switch (event.error) {
+                  case 'not-allowed':
+                    errorMessage = 'กรุณาอนุญาตการเข้าถึงไมโครโฟนในการตั้งค่าเบราว์เซอร์';
+                    break;
+                  case 'no-speech':
+                    errorMessage = 'ไม่ได้ยินเสียงพูด กรุณาลองอีกครั้ง';
+                    break;
+                  case 'network':
+                    errorMessage = 'เกิดข้อผิดพลาดเครือข่าย กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต';
+                    break;
+                  default:
+                    errorMessage = `เกิดข้อผิดพลาดในการรับรู้เสียง: ${event.error}`;
+                }
+                
+                // Show error message to user
+                const errorMsg = { 
+                  id: Date.now(), 
+                  text: `🎤 ${errorMessage}`, 
+                  sender: 'system',
+                  timestamp: new Date().toISOString()
+                };
+                setGeminiMessages(prev => [...prev, errorMsg]);
+              };
+              
+              recognition.onend = () => {
+                console.log('🎤 Voice recognition ended');
+                setIsListening(false);
+              };
+              
+              setSpeechRecognition(recognition);
+              
+              // Request microphone permission on mobile
+              if ('mediaDevices' in navigator && 'getUserMedia' in navigator.mediaDevices) {
+                navigator.mediaDevices.getUserMedia({ audio: true })
+                  .then(() => console.log('🎤 Microphone permission granted'))
+                  .catch(() => console.log('❌ Microphone permission denied'));
+              }
+            } else {
+              console.warn('⚠️ Voice features not supported in this browser');
+              setVoiceSupported(false);
+            }
+          };
           
           // Check API status function
           const checkApiStatus = async () => {
@@ -320,6 +440,56 @@
             } catch (error) {
               console.error('❌ Failed to check API status:', error);
               setGeminiStatus('unavailable');
+            }
+          };
+          
+          // Voice Functions
+          const startVoiceRecording = () => {
+            if (speechRecognition && !isListening) {
+              speechRecognition.start();
+            }
+          };
+          
+          const stopVoiceRecording = () => {
+            if (speechRecognition && isListening) {
+              speechRecognition.stop();
+            }
+          };
+          
+          const speakText = (text) => {
+            if (!window.speechSynthesis) return;
+            
+            // Stop any current speech
+            window.speechSynthesis.cancel();
+            
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'th-TH'; // Thai language
+            utterance.rate = 0.9; // Slightly slower for better understanding
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+            
+            utterance.onstart = () => {
+              console.log('🔊 Started speaking');
+              setIsSpeaking(true);
+            };
+            
+            utterance.onend = () => {
+              console.log('🔇 Finished speaking');
+              setIsSpeaking(false);
+            };
+            
+            utterance.onerror = (event) => {
+              console.error('❌ Speech synthesis error:', event.error);
+              setIsSpeaking(false);
+            };
+            
+            window.speechSynthesis.speak(utterance);
+          };
+          
+          const stopSpeaking = () => {
+            if (window.speechSynthesis) {
+              window.speechSynthesis.cancel();
+              setIsSpeaking(false);
             }
           };
 
@@ -780,6 +950,14 @@
               };
 
               setGeminiMessages(prev => [...prev, aiMessage]);
+              
+              // Auto-speak AI response if voice is supported
+              if (voiceSupported && response.message) {
+                // Add small delay to ensure message is displayed first
+                setTimeout(() => {
+                  speakText(response.message);
+                }, 500);
+              }
             } catch (error) {
               console.error('Gemini chat error:', error);
               
@@ -2597,16 +2775,23 @@
 
               {/* Gemini AI Chat Modal */}
               {showGeminiChat && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                  <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 h-3/4 flex flex-col">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+                  <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl h-full sm:h-3/4 flex flex-col">
                     {/* Chat Header */}
-                    <div className="bg-green-600 text-white p-4 rounded-t-lg flex justify-between items-center">
+                    <div className="bg-green-600 text-white p-3 sm:p-4 rounded-t-lg flex justify-between items-center">
                       <div>
-                        <h3 className="text-lg font-semibold">ปรึกษา Gemini AI</h3>
-                        <div className="text-sm opacity-90">
-                          {geminiStatus === 'ready' && '🟢 พร้อมใช้งาน'}
-                          {geminiStatus === 'unavailable' && '🔴 ไม่พร้อมใช้งาน'}
-                          {geminiStatus === 'unknown' && '🟡 กำลังตรวจสอบ...'}
+                        <h3 className="text-base sm:text-lg font-semibold">ปรึกษา Gemini AI</h3>
+                        <div className="text-xs sm:text-sm opacity-90 flex items-center space-x-2">
+                          <span>
+                            {geminiStatus === 'ready' && '🟢 พร้อมใช้งาน'}
+                            {geminiStatus === 'unavailable' && '🔴 ไม่พร้อมใช้งาน'}
+                            {geminiStatus === 'unknown' && '🟡 กำลังตรวจสอบ...'}
+                          </span>
+                          {voiceSupported && (
+                            <span className="text-xs bg-green-700 px-2 py-1 rounded">
+                              🎤 เสียงพร้อม
+                            </span>
+                          )}
                         </div>
                       </div>
                       <button
@@ -2653,30 +2838,68 @@
                     {/* Chat Input */}
                     <div className="border-t p-4">
                       <form onSubmit={handleGeminiSend} className="flex space-x-2">
-                        <input
-                          type="text"
-                          value={geminiInput}
-                          onChange={(e) => setGeminiInput(e.target.value)}
-                          placeholder="พิมพ์คำถามของคุณ..."
-                          className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                          disabled={geminiLoading}
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                              e.preventDefault();
-                              if (geminiInput.trim() && !geminiLoading) {
-                                handleGeminiSend(e);
+                        <div className="flex-1 relative">
+                          <input
+                            type="text"
+                            value={geminiInput}
+                            onChange={(e) => setGeminiInput(e.target.value)}
+                            placeholder="พิมพ์คำถามของคุณ หรือกดไมค์เพื่อพูด..."
+                            className="w-full border border-gray-300 rounded-lg px-4 py-2 pr-12 focus:outline-none focus:ring-2 focus:ring-green-500 chat-input-mobile"
+                            disabled={geminiLoading}
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                if (geminiInput.trim() && !geminiLoading) {
+                                  handleGeminiSend(e);
+                                }
                               }
-                            }
-                          }}
-                        />
+                            }}
+                          />
+                          
+                          {/* Voice Input Button */}
+                          {voiceSupported && (
+                            <button
+                              type="button"
+                              onClick={isListening ? stopVoiceRecording : startVoiceRecording}
+                              className={`absolute right-2 top-1/2 transform -translate-y-1/2 p-2 rounded-full transition-colors voice-button ${
+                                isListening 
+                                  ? 'bg-red-500 text-white recording-pulse' 
+                                  : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                              }`}
+                              disabled={geminiLoading}
+                              title={isListening ? 'หยุดบันทึกเสียง (กำลังฟัง...)' : 'กดเพื่อพูดกับ AI'}
+                            >
+                              {isListening ? '🔴' : '🎤'}
+                            </button>
+                          )}
+                        </div>
+                        
+                        {/* Send Button */}
                         <button
                           type="submit"
                           disabled={geminiLoading || !geminiInput.trim()}
                           className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                         >
-                          ส่ง
+                          {geminiLoading ? '⏳' : '📤'}
                         </button>
+                        
+                        {/* Voice Controls */}
+                        {voiceSupported && (
+                          <button
+                            type="button"
+                            onClick={isSpeaking ? stopSpeaking : () => {}}
+                            className={`px-4 py-2 rounded-lg transition-colors ${
+                              isSpeaking 
+                                ? 'bg-red-500 text-white hover:bg-red-600' 
+                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            }`}
+                            disabled={!isSpeaking}
+                            title={isSpeaking ? 'หยุดเสียงพูด' : 'ไม่มีเสียงพูด'}
+                          >
+                            {isSpeaking ? '🔇' : '🔊'}
+                          </button>
+                        )}
                       </form>
                     </div>
                   </div>
