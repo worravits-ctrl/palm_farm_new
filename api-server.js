@@ -70,7 +70,11 @@ app.use(helmet({
                 "'unsafe-eval'"
             ],
             "style-src": ["'self'", "https://cdn.jsdelivr.net", "https://cdn.tailwindcss.com", "'unsafe-inline'"],
-            "connect-src": ["'self'", "https://unpkg.com"], // Allow connections to unpkg for source maps
+            "connect-src": [
+                "'self'", 
+                "https://unpkg.com",
+                "https://palmfarmnew-production.up.railway.app" // Explicitly allow API connections
+            ], 
         },
     },
 }));
