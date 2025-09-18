@@ -68,8 +68,21 @@ const App = () => {
     priority: 'ปานกลาง'
   });
 
-  // API base URL
-  const API_BASE = 'http://localhost:3001/api';
+  // API base URL - Dynamic for Railway deployment
+  const getApiBaseUrl = () => {
+    const { protocol, hostname, port } = window.location;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      // Development environment
+      return 'http://localhost:3001/api';
+    }
+    // Production environment (Railway or other)
+    // Use the same protocol and hostname, but without a specific port
+    return `${protocol}//${hostname}/api`;
+  };
+
+  const API_BASE = getApiBaseUrl();
+  console.log(`API is set to: ${API_BASE}`);
+
 
   // Helper: fetch with auth
   const apiFetch = async (url, options = {}) => {
@@ -1466,4 +1479,211 @@ const App = () => {
                       <textarea
                         name="notes"
                         value={editFormData.notes}
-   
+                        onChange={handleEditChange}
+                        rows="2"
+                        className="w-full p-2 border border-gray-300 rounded-lg"
+                      ></textarea>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={handleCancelEdit}
+                        className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-lg transition-colors"
+                      >
+                        ยกเลิก
+                      </button>
+                      <button
+                        type="submit"
+                        className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
+                      >
+                        บันทึกการแก้ไข
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Notes Tab */}
+        {activeTab === 'notes' && (
+          <div className="space-y-8">
+            <h2 className="text-3xl font-bold text-gray-800">บันทึกย่อ</h2>
+            
+            {/* Add Note Form */}
+            <div className="bg-white p-6 rounded-xl shadow-md">
+              <h3 className="text-xl font-semibold text-gray-800 mb-4">บันทึกย่อใหม่</h3>
+              <form onSubmit={handleNoteSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">วันที่</label>
+                  <input type="date" name="date" required className="w-full p-2 border border-gray-300 rounded-lg" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">หัวข้อ</label>
+                  <input type="text" name="title" required className="w-full p-2 border border-gray-300 rounded-lg" />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">เนื้อหา</label>
+                  <textarea name="content" rows="4" required className="w-full p-2 border border-gray-300 rounded-lg"></textarea>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">หมวดหมู่</label>
+                  <select name="category" className="w-full p-2 border border-gray-300 rounded-lg">
+                    <option value="ทั่วไป">ทั่วไป</option>
+                    <option value="สำคัญ">สำคัญ</option>
+                    <option value="ด่วน">ด่วน</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">ความสำคัญ</label>
+                  <select name="priority" className="w-full p-2 border border-gray-300 rounded-lg">
+                    <option value="ปานกลาง">ปานกลาง</option>
+                    <option value="สูง">สูง</option>
+                    <option value="ต่ำ">ต่ำ</option>
+                  </select>
+                </div>
+                <div className="md:col-span-2">
+                  <button type="submit" className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-lg transition-colors">
+                    บันทึกบันทึกย่อ
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Notes Data Table */}
+            <div className="bg-white p-6 rounded-xl shadow-md">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-semibold text-gray-800">บันทึกย่อทั้งหมด</h3>
+                <button
+                  onClick={() => exportToCSV(
+                    notesData,
+                    'notes_data.csv',
+                    ['date', 'title', 'content', 'category', 'priority']
+                  )}
+                  className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2.586l-4.707 4.707a1 1 0 01-1.414 0L7 9.586V18a1 1 0 01-1 1H3a1 1 0 01-1-1V4z" />
+                  </svg>
+                  Export CSV
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead>
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">วันที่</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">หัวข้อ</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เนื้อหา</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">หมวดหมู่</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ความสำคัญ</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {notesData.length > 0 ? (
+                      notesData.map((item) => (
+                        <tr key={item.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.date}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.title}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.content}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.category}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.priority}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <div className="flex gap-2">
+                              <button onClick={() => handleEditNote(item)} className="text-blue-500 hover:text-blue-700 text-xs">แก้ไข</button>
+                              <button onClick={() => handleDeleteNote(item.id)} className="text-red-500 hover:text-red-700 text-xs">ลบ</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">ยังไม่มีบันทึกย่อในระบบ</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Reports Tab */}
+        {activeTab === 'reports' && (
+          <div className="space-y-8">
+            <h2 className="text-3xl font-bold text-gray-800">รายงาน</h2>
+            <p className="text-gray-700">ฟีเจอร์รายงานจะมาในเวอร์ชันถัดไป</p>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+
+  return (
+    <div className="font-sans antialiased">
+      {/* Global Loader */}
+      {loading && (
+        <div className="fixed inset-0 bg-white bg-opacity-75 flex items-center justify-center z-50">
+          <svg xmlns="http://www.w3.org/2000/svg" className="animate-spin h-10 w-10 text-green-600" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" fill="none" />
+            <path className="opacity-75" fill="currentColor" d="M4.293 12.293a1 1 0 011.414 0L12 18.586l6.293-6.293a1 1 0 111.414 1.414l-7 7a1 1 0 01-1.414 0l-7-7a1 1 0 010-1.414z" />
+          </svg>
+        </div>
+      )}
+
+      {/* Main App Content */}
+      {!currentUser ? (
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-sm">
+            <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">เข้าสู่ระบบ</h2>
+            <form onSubmit={(e) => { e.preventDefault(); handleLogin(email, password); }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">อีเมล</label>
+                <input
+                  type="email"
+                  required
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none"
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">รหัสผ่าน</label>
+                <input
+                  type="password"
+                  required
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none"
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+              <div>
+                <button
+                  type="submit"
+                  className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                >
+                  {loading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
+                </button>
+              </div>
+              <div className="text-center">
+                <Link to="#" className="text-sm text-green-500 hover:underline">ลืมรหัสผ่าน?</Link>
+              </div>
+            </form>
+            <div className="mt-4 text-center">
+              <span className="text-sm text-gray-500">ยังไม่มีบัญชีใช่ไหม? </span>
+              <button
+                onClick={() => setActiveTab('signup')}
+                className="text-sm font-semibold text-green-500 hover:text-green-600"
+              >
+                สมัครสมาชิก
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <Dashboard />
+      )}
+    </div>
+  );
+};
+
+export default App;
