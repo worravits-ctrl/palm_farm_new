@@ -73,7 +73,12 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 
 // Static files
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'frontend', 'dist')));
+
+// Serve main app for any non-API routes
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'frontend', 'dist', 'index.html'));
+});
 
 // Authentication middleware
 const authenticateToken = (req, res, next) => {
