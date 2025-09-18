@@ -925,13 +925,38 @@
             setGeminiLoading(true);
 
             try {
-              // Prepare context data
+              // Prepare context data with current date information
+              const now = new Date();
+              const currentDate = now.toLocaleDateString('th-TH', {
+                year: 'numeric',
+                month: 'long', 
+                day: 'numeric',
+                weekday: 'long'
+              });
+              const currentMonth = now.getMonth() + 1; // 1-12
+              const currentYear = now.getFullYear();
+              const buddhistYear = currentYear + 543;
+              
               const context = {
+                // Current date information
+                currentDate: currentDate,
+                currentDateISO: now.toISOString().split('T')[0], // YYYY-MM-DD
+                currentDay: now.getDate(),
+                currentMonth: currentMonth,
+                currentYear: currentYear,
+                buddhistYear: buddhistYear,
+                currentTime: now.toLocaleTimeString('th-TH'),
+                
+                // Business data
                 totalRevenue: stats.harvest?.revenue || 0,
                 totalProfit: stats.harvest?.profit || 0,
                 fertilizerCost: stats.fertilizer?.cost || 0,
                 harvestCount: stats.harvest?.count || 0,
-                palmTreeCount: stats.palmtrees?.count || 0
+                palmTreeCount: stats.palmtrees?.count || 0,
+                
+                // User information
+                userName: currentUser?.username || 'ผู้ใช้',
+                userEmail: currentUser?.email || ''
               };
 
               const response = await api.call('/chat', {
@@ -2808,7 +2833,38 @@
                         <div className="text-center text-gray-500 py-8">
                           <div className="text-4xl mb-2">🤖</div>
                           <p>สวัสดี! ฉันคือ Gemini AI ผู้ช่วยของคุณ</p>
-                          <p className="text-sm">ถามคำถามเกี่ยวกับธุรกิจน้ำมันปาล์มของคุณได้เลย</p>
+                          <p className="text-sm mb-4">ถามคำถามเกี่ยวกับธุรกิจน้ำมันปาล์มของคุณได้เลย</p>
+                          
+                          {/* Example Questions */}
+                          <div className="text-left bg-gray-50 rounded-lg p-3 mt-4">
+                            <p className="font-medium text-gray-700 mb-2">💡 ตัวอย่างคำถาม:</p>
+                            <div className="space-y-1 text-sm text-gray-600">
+                              <button 
+                                onClick={() => setGeminiInput('วันนี้วันที่เท่าไหร่')}
+                                className="block w-full text-left hover:text-green-600 hover:bg-white p-1 rounded"
+                              >
+                                📅 วันนี้วันที่เท่าไหร่
+                              </button>
+                              <button 
+                                onClick={() => setGeminiInput('รายได้เดือนนี้เท่าไหร่')}
+                                className="block w-full text-left hover:text-green-600 hover:bg-white p-1 rounded"
+                              >
+                                💰 รายได้เดือนนี้เท่าไหร่
+                              </button>
+                              <button 
+                                onClick={() => setGeminiInput('ใส่ปุ๋ยครั้งล่าสุดเมื่อไหร่')}
+                                className="block w-full text-left hover:text-green-600 hover:bg-white p-1 rounded"
+                              >
+                                🌱 ใส่ปุ๋ยครั้งล่าสุดเมื่อไหร่
+                              </button>
+                              <button 
+                                onClick={() => setGeminiInput('ต้นไหนให้ผลผลิตเยอะที่สุด')}
+                                className="block w-full text-left hover:text-green-600 hover:bg-white p-1 rounded"
+                              >
+                                🌴 ต้นไหนให้ผลผลิตเยอะที่สุด
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       ) : (
                         geminiMessages.map((msg, index) => (

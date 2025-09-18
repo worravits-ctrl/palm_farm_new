@@ -1529,14 +1529,18 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
 
         // --- New Step: Intent Classification ---
         const intentPrompt = `
-            Classify the user's intent into one of the following categories: 'database_query', 'greeting', 'general_chitchat', 'next_harvest_query'.
-            - 'database_query': Asks for specific data, numbers, summaries, or records (e.g., "รายได้เท่าไหร่", "ใส่ปุ๋ยครั้งล่าสุด", "สรุปข้อมูลเดือนที่แล้ว").
+            Classify the user's intent into one of the following categories: 'database_query', 'greeting', 'general_chitchat', 'next_harvest_query', 'date_query'.
+            - 'date_query': Asking about current date/time/calendar information (e.g., "วันนี้วันที่เท่าไหร่", "วันนี้วันอะไร", "เดือนนี้เดือนอะไร", "ปีนี้ปีอะไร", "เวลาเท่าไหร่", "ตอนนี้วันอะไร").
+            - 'database_query': Asks for specific farm data, numbers, summaries, or records from the database (e.g., "รายได้เท่าไหร่", "ใส่ปุ๋ยครั้งล่าสุด", "สรุปข้อมูลเดือนที่แล้ว", "ต้นไหนให้ผลเยอะ").
             - 'greeting': Simple greetings (e.g., "สวัสดี", "ดีครับ", "hello").
-            - 'general_chitchat': Questions not related to the database (e.g., "สบายดีไหม", "คุณคือใคร").
+            - 'general_chitchat': Questions not related to the database or date (e.g., "สบายดีไหม", "คุณคือใคร").
             - 'next_harvest_query': Asks about the next harvest date (e.g., "เก็บเกี่ยวครั้งต่อไปเมื่อไหร่", "ตัดปาล์มครั้งต่อไปเมื่อไหร่").
 
+            Important: Questions about "วันนี้วันที่เท่าไหร่" should be classified as 'date_query', NOT 'database_query'.
+
             User message: "${message}"
-            Intent:
+            
+            Respond with ONLY the intent category name:
         `;
         
         console.log("--- Classifying Intent ---");
@@ -1557,6 +1561,25 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
             console.log(`✅ Responding with friendly message: "${friendlyMessage}"`);
             return res.json({
                 message: friendlyMessage,
+                timestamp: new Date().toISOString(),
+            });
+        }
+
+        // --- Handle date query ---
+        if (intent.includes('date_query')) {
+            const { context } = req.body; // Get context data from frontend
+            const today = new Date();
+            const thaiDate = today.toLocaleDateString('th-TH', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                weekday: 'long'
+            });
+            
+            const responseMessage = `วันนี้คือวัน${thaiDate} ครับ`;
+            console.log(`✅ Responding with current date: "${responseMessage}"`);
+            return res.json({
+                message: responseMessage,
                 timestamp: new Date().toISOString(),
             });
         }
@@ -1679,8 +1702,20 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
         console.log("Query Result:", queryResult);
 
         // --- 4. Second AI Call: Summarize the Result in Thai ---
+        const { context } = req.body; // Get context data from frontend
+        const currentDateInfo = context ? `
+            Current Date Information:
+            - Today: ${context.currentDate || 'ไม่ทราบ'}
+            - Date (ISO): ${context.currentDateISO || new Date().toISOString().split('T')[0]}
+            - Current Year: ${context.currentYear || new Date().getFullYear()} (Buddhist Year: ${context.buddhistYear || new Date().getFullYear() + 543})
+            - Current Month: ${context.currentMonth || new Date().getMonth() + 1}
+            - User: ${context.userName || 'ผู้ใช้'}
+        ` : '';
+        
         const summarizationPrompt = `
-            You are a helpful AI assistant for a palm oil farm. Your task is to answer the user's question based on the data provided.
+            You are a helpful AI assistant for a palm oil farm management system. Your task is to answer the user's question based on the data provided.
+
+            ${currentDateInfo}
 
             User's Original Question: "${message}"
 
@@ -1688,12 +1723,16 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
             ${JSON.stringify(queryResult, null, 2)}
 
             Instructions:
-            - Answer in Thai.
-            - Be concise and clear.
+            - Answer in Thai language.
+            - Be concise, clear, and friendly.
+            - Use the current date information to provide context-aware answers.
+            - When user asks about "วันนี้" (today), "เดือนนี้" (this month), "ปีนี้" (this year), use the current date provided above.
             - If the data is empty or doesn't answer the question, say "ไม่พบข้อมูลที่เกี่ยวข้อง".
-            - Format numbers and dates in a friendly, readable way (e.g., add commas to numbers, format dates as DD/MM/YYYY).
+            - Format numbers with Thai number formatting (add commas, use บาท for currency).
+            - Format dates in Thai style (DD/MM/YYYY with Buddhist era when appropriate).
             - Do not show the user the raw JSON data.
             - Summarize the data to directly answer the user's question.
+            - If user asks about current date/time, refer to the current date information provided.
         `;
 
         console.log("--- Summarizing Result ---");
