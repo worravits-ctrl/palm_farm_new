@@ -1,18 +1,37 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
-const cors = require('cors');
-const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const bodyParser = require('body-parser');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
+const bcrypt = require('bcrypt');
 const path = require('path');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-require('dotenv').config();
-console.log('🔍 Environment variables loaded:');
-console.log('   GEMINI_API_KEY exists:', !!process.env.GEMINI_API_KEY);
-console.log('   GEMINI_API_KEY length:', process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.length : 0);
-console.log('   GEMINI_API_KEY starts with:', process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.substring(0, 10) + '...' : 'undefined');
+const fs = require('fs');
+
+// --- Database Configuration ---
+const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_STATIC_URL;
+const dbDirectory = isProduction ? '/data' : path.join(__dirname, 'database');
+const dbPath = path.join(dbDirectory, 'palmoil.db');
+const localDbPath = path.join(__dirname, 'database', 'palmoil.db');
+
+// Ensure the database directory exists in production and copy the initial DB if it doesn't exist
+if (isProduction) {
+  if (!fs.existsSync(dbDirectory)) {
+    fs.mkdirSync(dbDirectory, { recursive: true });
+    console.log(`Created directory: ${dbDirectory}`);
+  }
+  if (!fs.existsSync(dbPath) && fs.existsSync(localDbPath)) {
+    fs.copyFileSync(localDbPath, dbPath);
+    console.log(`Initial database copied to ${dbPath}`);
+  }
+}
+
+console.log(`Connecting to database at: ${dbPath}`);
+
+const db = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+        console.error('Error opening database', err.message);
+    } else {
+        console.log('Connected to the SQLite database.');
+    }
+});
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -30,10 +49,6 @@ if (!GEMINI_API_KEY || GEMINI_API_KEY === 'your-gemini-api-key-here' || GEMINI_A
 } else {
     console.log('✅ GEMINI_API_KEY is configured correctly');
 }
-
-// Database connection
-const dbPath = path.join(__dirname, 'database', 'palmoil.db');
-const db = new sqlite3.Database(dbPath);
 
 // Middleware
 app.use(helmet({
