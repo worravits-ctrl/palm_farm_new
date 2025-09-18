@@ -15,7 +15,7 @@ console.log('   GEMINI_API_KEY length:', process.env.GEMINI_API_KEY ? process.en
 console.log('   GEMINI_API_KEY starts with:', process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.substring(0, 10) + '...' : 'undefined');
 
 const app = express();
-const PORT = process.env.PORT || 8080; // Railway uses PORT environment variable, fallback to 8080
+const PORT = process.env.PORT || 3001; // For local development, use 3001, Railway will override with PORT env var
 const JWT_SECRET = process.env.JWT_SECRET || 'palmoil-secret-key-2025';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'your-gemini-api-key-here';
 
@@ -119,6 +119,33 @@ const requireAdmin = (req, res, next) => {
 };
 
 // ==== AUTH ROUTES ====
+
+// Health check endpoint (no auth required)
+app.get('/api/health', (req, res) => {
+    res.json({ 
+        status: 'OK', 
+        timestamp: new Date().toISOString(),
+        geminiApiConfigured: !!GEMINI_API_KEY && GEMINI_API_KEY !== 'your-gemini-api-key-here'
+    });
+});
+
+// API status endpoint (no auth required)
+app.get('/api/status', (req, res) => {
+    res.json({ 
+        server: 'Palm Oil API Server',
+        version: '1.0.0',
+        status: 'running',
+        port: PORT,
+        gemini: {
+            configured: !!GEMINI_API_KEY && GEMINI_API_KEY !== 'your-gemini-api-key-here',
+            keyLength: GEMINI_API_KEY ? GEMINI_API_KEY.length : 0
+        },
+        database: {
+            path: dbPath
+        },
+        timestamp: new Date().toISOString()
+    });
+});
 
 // Register
 app.post('/api/auth/register', async (req, res) => {

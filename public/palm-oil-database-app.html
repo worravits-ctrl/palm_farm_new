@@ -266,6 +266,7 @@
           const [geminiMessages, setGeminiMessages] = useState([]);
           const [geminiInput, setGeminiInput] = useState('');
           const [geminiLoading, setGeminiLoading] = useState(false);
+          const [geminiStatus, setGeminiStatus] = useState('unknown'); // 'ready', 'unavailable', 'unknown'
           const [loading, setLoading] = useState(false);
 
           // Data states
@@ -298,7 +299,29 @@
               setActiveTab('dashboard');
               loadAllData(userObj);
             }
+            
+            // Check API status on startup
+            checkApiStatus();
           }, []);
+          
+          // Check API status function
+          const checkApiStatus = async () => {
+            try {
+              const response = await fetch(`${API_BASE_URL}/status`);
+              const status = await response.json();
+              console.log('🔍 API Status:', status);
+              
+              if (!status.gemini.configured) {
+                console.warn('⚠️ Gemini API key is not configured on server');
+                setGeminiStatus('unavailable');
+              } else {
+                setGeminiStatus('ready');
+              }
+            } catch (error) {
+              console.error('❌ Failed to check API status:', error);
+              setGeminiStatus('unavailable');
+            }
+          };
 
           // Load yearly statistics for reports
           const loadYearlyStats = async () => {
@@ -759,9 +782,38 @@
               setGeminiMessages(prev => [...prev, aiMessage]);
             } catch (error) {
               console.error('Gemini chat error:', error);
+              
+              // Better error handling with more specific messages
+              let errorText = 'ขออภัยครับ เกิดข้อผิดพลาดในการเชื่อมต่อ AI';
+              
+              if (error.response) {
+                // Server responded with error status
+                const status = error.response.status;
+                const data = error.response.data;
+                
+                if (status === 401) {
+                  errorText = '🔐 กรุณาเข้าสู่ระบบใหม่อีกครั้ง';
+                } else if (status === 500) {
+                  errorText = '⚠️ ระบบ AI ไม่พร้อมใช้งาน กรุณาลองใหม่ในภายหลัง';
+                  if (data && data.error) {
+                    errorText += `\nรายละเอียด: ${data.error}`;
+                  }
+                } else if (status === 429) {
+                  errorText = '⏱️ ใช้งาน AI มากเกินไป กรุณารอสักครู่แล้วลองใหม่';
+                } else {
+                  errorText = `❌ เกิดข้อผิดพลาด (${status}): ${data?.error || 'ไม่ทราบสาเหตุ'}`;
+                }
+              } else if (error.request) {
+                // Network error
+                errorText = '🌐 ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต';
+              } else {
+                // Other error
+                errorText = `💥 เกิดข้อผิดพลาด: ${error.message}`;
+              }
+              
               const errorMessage = { 
                 id: Date.now() + 1, 
-                text: 'ขออภัยครับ เกิดข้อผิดพลาดในการเชื่อมต่อ AI กรุณาลองใหม่อีกครั้ง', 
+                text: errorText, 
                 sender: 'ai',
                 timestamp: new Date().toISOString()
               };
@@ -2526,10 +2578,20 @@
               {currentUser && (
                 <button
                   onClick={() => setShowGeminiChat(!showGeminiChat)}
-                  className="fixed bottom-6 right-6 bg-blue-500 text-white p-4 rounded-full shadow-lg hover:bg-blue-600 transition-colors z-50"
-                  title="ปรึกษา Gemini AI"
+                  className={`fixed bottom-6 right-6 text-white p-4 rounded-full shadow-lg transition-colors z-50 ${
+                    geminiStatus === 'ready' ? 'bg-blue-500 hover:bg-blue-600' :
+                    geminiStatus === 'unavailable' ? 'bg-gray-400 cursor-not-allowed' :
+                    'bg-yellow-500 hover:bg-yellow-600'
+                  }`}
+                  title={
+                    geminiStatus === 'ready' ? 'ปรึกษา Gemini AI' :
+                    geminiStatus === 'unavailable' ? 'AI ไม่พร้อมใช้งาน' :
+                    'กำลังตรวจสอบ AI...'
+                  }
+                  disabled={geminiStatus === 'unavailable'}
                 >
-                  🤖
+                  {geminiStatus === 'ready' ? '🤖' : 
+                   geminiStatus === 'unavailable' ? '🚫' : '⏳'}
                 </button>
               )}
 
@@ -2539,7 +2601,14 @@
                   <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 h-3/4 flex flex-col">
                     {/* Chat Header */}
                     <div className="bg-green-600 text-white p-4 rounded-t-lg flex justify-between items-center">
-                      <h3 className="text-lg font-semibold">ปรึกษา Gemini AI</h3>
+                      <div>
+                        <h3 className="text-lg font-semibold">ปรึกษา Gemini AI</h3>
+                        <div className="text-sm opacity-90">
+                          {geminiStatus === 'ready' && '🟢 พร้อมใช้งาน'}
+                          {geminiStatus === 'unavailable' && '🔴 ไม่พร้อมใช้งาน'}
+                          {geminiStatus === 'unknown' && '🟡 กำลังตรวจสอบ...'}
+                        </div>
+                      </div>
                       <button
                         onClick={() => setShowGeminiChat(false)}
                         className="text-white hover:text-gray-200 text-xl"
