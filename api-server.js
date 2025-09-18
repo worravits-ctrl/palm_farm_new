@@ -1,126 +1,79 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-const path = require('path');
-const fs = require('fs');
-const helmet = require('helmet');
 const cors = require('cors');
-const rateLimit = require('express-rate-limit');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const bodyParser = require('body-parser');
-
-// --- Database Configuration ---
-const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_STATIC_URL;
-const dbDirectory = isProduction ? '/data' : path.join(__dirname, 'database');
-const dbPath = path.join(dbDirectory, 'palmoil.db');
-const localDbPath = path.join(__dirname, 'database', 'palmoil.db');
-
-// Ensure the database directory exists in production and copy the initial DB if it doesn't exist
-if (isProduction) {
-  try {
-    // Try to create directory if it doesn't exist
-    if (!fs.existsSync(dbDirectory)) {
-      fs.mkdirSync(dbDirectory, { recursive: true });
-      console.log(`✅ Created directory: ${dbDirectory}`);
-    }
-
-    // Copy initial database if it doesn't exist
-    if (!fs.existsSync(dbPath) && fs.existsSync(localDbPath)) {
-      fs.copyFileSync(localDbPath, dbPath);
-      console.log(`✅ Initial database copied to ${dbPath}`);
-    } else if (!fs.existsSync(dbPath)) {
-      console.log(`⚠️  No initial database found to copy`);
-    }
-  } catch (error) {
-    console.error(`❌ Error setting up database directory: ${error.message}`);
-    // Fallback to local database in production if /data is not writable
-    console.log(`🔄 Falling back to local database path`);
-  }
-}
-
-console.log(`Connecting to database at: ${dbPath}`);
-
-const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-        console.error('Error opening database', err.message);
-    } else {
-        console.log('Connected to the SQLite database.');
-    }
-});
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const path = require('path');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+require('dotenv').config();
+console.log('🔍 Environment variables loaded:');
+console.log('   GEMINI_API_KEY exists:', !!process.env.GEMINI_API_KEY);
+console.log('   GEMINI_API_KEY length:', process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.length : 0);
+console.log('   GEMINI_API_KEY starts with:', process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.substring(0, 10) + '...' : 'undefined');
 
 const app = express();
-
-// --- App Configuration ---
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'palmoil-secret-key-2025';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'your-gemini-api-key-here';
 
-// --- Middleware Setup ---
+// Initialize Gemini AI
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
-// 1. CORS
-app.use(cors());
+// Check API key configuration
+if (!GEMINI_API_KEY || GEMINI_API_KEY === 'your-gemini-api-key-here' || GEMINI_API_KEY === 'AIzaSyD_your_actual_gemini_api_key_here') {
+    console.warn('⚠️  WARNING: GEMINI_API_KEY is not configured properly!');
+    console.warn('⚠️  Please set your actual Gemini API key in the .env file');
+    console.warn('⚠️  Get your key from: https://makersuite.google.com/app/apikey');
+} else {
+    console.log('✅ GEMINI_API_KEY is configured correctly');
+}
 
-// 2. Body Parsers (for JSON and URL-encoded data)
-// Increased payload size limits for bulk imports
-app.use(bodyParser.json({ limit: '50mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
-app.use(express.json());
+// Database connection
+const dbPath = path.join(__dirname, 'database', 'palmoil.db');
+const db = new sqlite3.Database(dbPath);
 
-// 3. Security Headers with Helmet
+// Middleware
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
-            ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-            "script-src": [
-                "'self'",
-                "https://unpkg.com",
-                "https://cdn.jsdelivr.net",
-                "https://cdn.tailwindcss.com", // Allow Tailwind CSS
-                "https://unpkg.com/@babel/standalone/babel.min.js",
-                "'unsafe-inline'",
-                "'unsafe-eval'"
-            ],
-            "style-src": ["'self'", "https://cdn.jsdelivr.net", "https://cdn.tailwindcss.com", "'unsafe-inline'"],
-            "connect-src": [
+            defaultSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com"],
+            scriptSrc: [
                 "'self'", 
+                "'unsafe-inline'", 
+                "'unsafe-eval'",
+                "https://cdn.tailwindcss.com",
                 "https://unpkg.com",
-                "https://palmfarmnew-production.up.railway.app",
-                ...(isProduction ? [] : ["http://localhost:3001"]) // Allow localhost in development
-            ], 
+                "https://unpkg.com/react@18/umd/react.development.js",
+                "https://unpkg.com/react-dom@18/umd/react-dom.development.js",
+                "https://unpkg.com/@babel/standalone/babel.min.js"
+            ],
+            imgSrc: ["'self'", "data:", "https:"],
+            connectSrc: ["'self'"],
+            fontSrc: ["'self'", "https:", "data:"],
+            objectSrc: ["'none'"],
+            mediaSrc: ["'self'"],
+            frameSrc: ["'none'"],
         },
     },
 }));
+app.use(cors());
+// Increase payload size limits for bulk imports (800+ rows CSV files)
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 
-// 4. Rate Limiting
+// Rate limiting
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 1000, // limit each IP to 1000 requests per windowMs
-    message: 'Too many requests from this IP, please try again after 15 minutes'
+    max: 1000 // limit each IP to 1000 requests per windowMs (increased for development)
 });
-app.use('/api/', limiter); // Apply to all API routes
+app.use('/api/', limiter);
 
-// 5. Static Files - Serve from root directory for Railway
-app.use(express.static(__dirname));
-
-// --- Gemini AI Initialization ---
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-let genAI;
-
-// Check API key configuration before initializing
-if (!GEMINI_API_KEY || GEMINI_API_KEY === 'your-gemini-api-key-here') {
-    console.warn('⚠️  WARNING: GEMINI_API_KEY is not configured or is set to the default placeholder.');
-    console.warn('⚠️  The AI chat feature will be disabled.');
-    console.warn('⚠️  Please set your actual Gemini API key as an environment variable in Railway.');
-    console.warn('⚠️  Get your key from: https://makersuite.google.com/app/apikey');
-} else {
-    try {
-        genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-        console.log('✅ Gemini AI initialized successfully.');
-    } catch (error) {
-        console.error('❌ CRITICAL: Failed to initialize Gemini AI. Check your API key and package installation.', error);
-        genAI = null; // Ensure genAI is null if initialization fails
-    }
-}
+// Static files
+app.use(express.static('public'));
 
 // Authentication middleware
 const authenticateToken = (req, res, next) => {
@@ -1436,12 +1389,12 @@ app.get('/api/yearly-stats', authenticateToken, (req, res) => {
 
 // Serve main app
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'palm-oil-database-app.html'));
+    res.sendFile(path.join(__dirname, 'public', 'palm-oil-database-app.html'));
 });
 
 // Serve database app
 app.get('/palm-oil-database-app.html', (req, res) => {
-    res.sendFile(path.join(__dirname, 'palm-oil-database-app.html'));
+    res.sendFile(path.join(__dirname, 'public', 'palm-oil-database-app.html'));
 });
 
 // Serve other HTML files
@@ -1518,14 +1471,6 @@ const parseThaiDate = (text) => {
 
 // Gemini AI Chat endpoint (Text-to-SQL Implementation)
 app.post('/api/chat', authenticateToken, async (req, res) => {
-    if (!genAI) {
-        console.error('AI chat endpoint called, but Gemini AI is not initialized.');
-        return res.status(503).json({ 
-            error: 'AI service unavailable',
-            message: 'AI service is not configured correctly on the server. Please contact the administrator.'
-        });
-    }
-
     try {
         const { message } = req.body;
         const user_id = req.user.userId;
@@ -1727,7 +1672,9 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
     }
 });
 
-// Start the server
+// Start server
 app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+    console.log(`🚀 Palm Oil API Server running on http://localhost:${PORT}`);
+    console.log(`📊 Database: ${dbPath}`);
+    console.log(`🔑 JWT Secret: ${JWT_SECRET.substring(0, 10)}...`);
 });
