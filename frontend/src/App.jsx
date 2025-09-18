@@ -71,7 +71,7 @@ const App = () => {
   });
 
   // API base URL
-  const API_BASE = '/api'; // Changed from http://localhost:3001/api to /api for production deployment
+  const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'; // Use VITE_API_BASE_URL from environment variables
 
   // Helper: fetch with auth
   const apiFetch = async (url, options = {}) => {
