@@ -237,7 +237,7 @@ const App = () => {
   const handleLogin = async (email, password) => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/auth/login`, {
+      const res = await apiFetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -256,7 +256,7 @@ const App = () => {
         alert(err.error || 'Login failed');
       }
     } catch (e) {
-      alert('Login error');
+      alert('Login error: ' + e.message);
     }
     setLoading(false);
   };
@@ -265,7 +265,7 @@ const App = () => {
   const handleSignup = async (username, email, password) => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/auth/register`, {
+      const res = await apiFetch(`${API_BASE}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, email, password })
@@ -278,7 +278,7 @@ const App = () => {
         alert(err.error || 'Signup failed');
       }
     } catch (e) {
-      alert('Signup error');
+      alert('Signup error: ' + e.message);
     }
     setLoading(false);
   };
@@ -1464,7 +1464,7 @@ const App = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Palm Tree ID</label>
                       <input
                         type="text"
-                        name="tree_id"
+                                               name="tree_id"
                         value={editFormData.tree_id}
                                                onChange={handleEditChange}
                         required

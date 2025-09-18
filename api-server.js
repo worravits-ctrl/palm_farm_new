@@ -49,10 +49,12 @@ app.use(helmet({
                 "https://unpkg.com",
                 "https://unpkg.com/react@18/umd/react.development.js",
                 "https://unpkg.com/react-dom@18/umd/react-dom.development.js",
-                "https://unpkg.com/@babel/standalone/babel.min.js"
+                "https://unpkg.com/@babel/standalone/babel.min.js",
+                "https://unpkg.com/react-window@1.8.6/dist/umd/react-window.development.js",
+                "https://unpkg.com/chart.js@4.4.0/dist/chart.umd.js"
             ],
             imgSrc: ["'self'", "data:", "https:"],
-            connectSrc: ["'self'"],
+            connectSrc: ["'self'", "*.up.railway.app"],
             fontSrc: ["'self'", "https:", "data:"],
             objectSrc: ["'none'"],
             mediaSrc: ["'self'"],

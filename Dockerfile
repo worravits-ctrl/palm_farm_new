@@ -8,6 +8,9 @@ RUN npm install --production
 
 COPY . .
 
+# Initialize database
+RUN npm run init-db
+
 # Build frontend
 WORKDIR /app/frontend
 RUN npm install --include=dev
