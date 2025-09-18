@@ -46,9 +46,14 @@ app.use(helmet({
                 "'unsafe-inline'", 
                 "'unsafe-eval'",
                 "https://unpkg.com", // Allow all from unpkg.com
+                "https://unpkg.com/react@18/umd/react.development.js",
+                "https://unpkg.com/react-dom@18/umd/react-dom.development.js",
+                "https://unpkg.com/@babel/standalone/babel.min.js",
+                "https://unpkg.com/react-window@1.8.6/dist/umd/react-window.development.js",
+                "https://unpkg.com/chart.js@4.4.0/dist/chart.umd.js"
             ],
             imgSrc: ["'self'", "data:", "https:"],
-            connectSrc: ["'self'", "*.up.railway.app", "http://localhost:3001"], // Temporarily allow localhost for debugging
+            connectSrc: ["'self'", "*.up.railway.app", "https://unpkg.com"], // Allow unpkg.com for .map files and remove localhost
             fontSrc: ["'self'", "https:", "data:"],
             objectSrc: ["'none'"],
             mediaSrc: ["'self'"],
