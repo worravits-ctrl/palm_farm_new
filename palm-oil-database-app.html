@@ -11,7 +11,7 @@
         script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.tailwindcss.com; 
         script-src-attr 'unsafe-inline';
         style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; 
-        connect-src 'self' http://localhost:3001 https://unpkg.com; 
+        connect-src 'self' http://localhost:3001 https://unpkg.com https://palmfarmnew-production.up.railway.app wss://palmfarmnew-production.up.railway.app; 
         img-src 'self' data: https:;
         font-src 'self' https:;
         worker-src 'none';
@@ -61,8 +61,18 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // API Configuration
-        const API_BASE_URL = 'http://localhost:3001/api';
+        // API Configuration - Dynamic for Railway deployment
+        const getApiBaseUrl = () => {
+            const { protocol, hostname } = window.location;
+            if (protocol === 'https:' || hostname.includes('railway') || hostname.includes('production') || hostname !== 'localhost') {
+                // Production environment (Railway or other hosted platforms)
+                return `${protocol}//${hostname}/api`;
+            }
+            // Development environment
+            return 'http://localhost:3001/api';
+        };
+        const API_BASE_URL = getApiBaseUrl();
+        console.log(`API calls will be sent to: ${API_BASE_URL}`);
         
         // API Helper Functions
         const api = {
@@ -2658,7 +2668,7 @@
 
             // Get current year for monthly charts
             const currentYear = new Date().getFullYear();
-            const monthLabels = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+            const monthLabels = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'};
 
             // ===== MONTHLY CHARTS =====
 
@@ -3029,17 +3039,6 @@
               console.log('📊 Weight data:', weightData);
               
               new Chart(harvestWeightCtx, {
-                type: 'bar',
-                data: {
-                  labels: years,
-                  datasets: [{
-                    label: 'น้ำหนัก (กก.)',
-                    data: weightData,
-                    backgroundColor: 'rgba(59, 130, 246, 0.8)',
-                    borderColor: 'rgb(59, 130, 246)',
-                    borderWidth: 1
-                  }]
-                },
                 options: {
                   responsive: true,
                   maintainAspectRatio: false,

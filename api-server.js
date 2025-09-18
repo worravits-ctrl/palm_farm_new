@@ -17,13 +17,24 @@ const localDbPath = path.join(__dirname, 'database', 'palmoil.db');
 
 // Ensure the database directory exists in production and copy the initial DB if it doesn't exist
 if (isProduction) {
-  if (!fs.existsSync(dbDirectory)) {
-    fs.mkdirSync(dbDirectory, { recursive: true });
-    console.log(`Created directory: ${dbDirectory}`);
-  }
-  if (!fs.existsSync(dbPath) && fs.existsSync(localDbPath)) {
-    fs.copyFileSync(localDbPath, dbPath);
-    console.log(`Initial database copied to ${dbPath}`);
+  try {
+    // Try to create directory if it doesn't exist
+    if (!fs.existsSync(dbDirectory)) {
+      fs.mkdirSync(dbDirectory, { recursive: true });
+      console.log(`✅ Created directory: ${dbDirectory}`);
+    }
+
+    // Copy initial database if it doesn't exist
+    if (!fs.existsSync(dbPath) && fs.existsSync(localDbPath)) {
+      fs.copyFileSync(localDbPath, dbPath);
+      console.log(`✅ Initial database copied to ${dbPath}`);
+    } else if (!fs.existsSync(dbPath)) {
+      console.log(`⚠️  No initial database found to copy`);
+    }
+  } catch (error) {
+    console.error(`❌ Error setting up database directory: ${error.message}`);
+    // Fallback to local database in production if /data is not writable
+    console.log(`🔄 Falling back to local database path`);
   }
 }
 
@@ -73,7 +84,8 @@ app.use(helmet({
             "connect-src": [
                 "'self'", 
                 "https://unpkg.com",
-                "https://palmfarmnew-production.up.railway.app" // Explicitly allow API connections
+                "https://palmfarmnew-production.up.railway.app",
+                ...(isProduction ? [] : ["http://localhost:3001"]) // Allow localhost in development
             ], 
         },
     },
@@ -87,8 +99,8 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter); // Apply to all API routes
 
-// 5. Static Files
-app.use(express.static('public'));
+// 5. Static Files - Serve from root directory for Railway
+app.use(express.static(__dirname));
 
 // --- Gemini AI Initialization ---
 const { GoogleGenerativeAI } = require("@google/generative-ai");

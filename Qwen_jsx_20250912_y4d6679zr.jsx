@@ -71,13 +71,12 @@ const App = () => {
   // API base URL - Dynamic for Railway deployment
   const getApiBaseUrl = () => {
     const { protocol, hostname, port } = window.location;
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      // Development environment
-      return 'http://localhost:3001/api';
+    if (protocol === 'https:' || hostname.includes('railway') || hostname.includes('production') || hostname !== 'localhost') {
+      // Production environment (Railway or other hosted platforms)
+      return `${protocol}//${hostname}/api`;
     }
-    // Production environment (Railway or other)
-    // Use the same protocol and hostname, but without a specific port
-    return `${protocol}//${hostname}/api`;
+    // Development environment
+    return 'http://localhost:3001/api';
   };
 
   const API_BASE = getApiBaseUrl();
