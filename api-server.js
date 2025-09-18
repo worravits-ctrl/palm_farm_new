@@ -72,14 +72,6 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Static files
-app.use(express.static(path.join(__dirname, 'frontend', 'dist')));
-
-// Serve main app for any non-API routes
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'frontend', 'dist', 'index.html'));
-});
-
 // Authentication middleware
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
@@ -1682,4 +1674,12 @@ app.listen(PORT, () => {
     console.log(`🚀 Palm Oil API Server running on http://localhost:${PORT}`);
     console.log(`📊 Database: ${dbPath}`);
     console.log(`🔑 JWT Secret: ${JWT_SECRET.substring(0, 10)}...`);
+});
+
+// Static files (serve frontend build)
+app.use(express.static(path.join(__dirname, 'frontend', 'dist')));
+
+// Serve main app for any non-API routes (catch-all for SPA routing)
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'frontend', 'dist', 'index.html'));
 });
