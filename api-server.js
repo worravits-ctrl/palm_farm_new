@@ -45,7 +45,6 @@ app.use(helmet({
                 "'self'", 
                 "'unsafe-inline'", 
                 "'unsafe-eval'",
-                "https://cdn.tailwindcss.com",
                 "https://unpkg.com", // Allow all from unpkg.com
             ],
             imgSrc: ["'self'", "data:", "https:"],
