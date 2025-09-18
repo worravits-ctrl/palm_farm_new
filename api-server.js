@@ -1755,6 +1755,79 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
     }
 });
 
+// Database Viewer Endpoint (สำหรับดูข้อมูลใน Production)
+app.get('/api/admin/db-viewer', authenticateToken, (req, res) => {
+    // ตรวจสอบว่าเป็น admin เท่านั้น
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { table, limit = 100 } = req.query;
+    
+    // รายการตารางที่อนุญาต
+    const allowedTables = ['users', 'harvest_data', 'fertilizer_data', 'palm_tree_data', 'notes_data'];
+    
+    if (!table) {
+        // แสดงรายการตารางทั้งหมด
+        const queries = allowedTables.map(tableName => {
+            return new Promise((resolve, reject) => {
+                db.get(`SELECT COUNT(*) as count FROM ${tableName}`, [], (err, row) => {
+                    if (err) reject(err);
+                    else resolve({ table: tableName, count: row.count });
+                });
+            });
+        });
+        
+        Promise.all(queries).then(results => {
+            res.json({
+                message: 'Database Tables Overview',
+                tables: results,
+                usage: 'Add ?table=table_name&limit=50 to view data'
+            });
+        }).catch(err => {
+            res.status(500).json({ error: err.message });
+        });
+        return;
+    }
+    
+    if (!allowedTables.includes(table)) {
+        return res.status(400).json({ error: 'Invalid table name', allowed: allowedTables });
+    }
+    
+    const sql = `SELECT * FROM ${table} ORDER BY id DESC LIMIT ?`;
+    db.all(sql, [parseInt(limit)], (err, rows) => {
+        if (err) {
+            res.status(500).json({ error: err.message });
+        } else {
+            res.json({
+                table: table,
+                count: rows.length,
+                limit: parseInt(limit),
+                data: rows
+            });
+        }
+    });
+});
+
+// Database Schema Viewer
+app.get('/api/admin/db-schema', authenticateToken, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    const sql = `SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name`;
+    db.all(sql, [], (err, rows) => {
+        if (err) {
+            res.status(500).json({ error: err.message });
+        } else {
+            res.json({
+                message: 'Database Schema',
+                tables: rows
+            });
+        }
+    });
+});
+
 // Start server
 app.listen(PORT, () => {
     console.log(`🚀 Palm Oil API Server running on http://localhost:${PORT}`);

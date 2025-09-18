@@ -15,6 +15,8 @@ const server = http.createServer((req, res) => {
         filePath = path.join(__dirname, 'palm-oil-database-app.html');
     } else if (req.url === '/old') {
         filePath = path.join(__dirname, 'palm-oil-app.html');
+    } else if (req.url === '/db' || req.url === '/db-viewer') {
+        filePath = path.join(__dirname, 'public', 'db-viewer.html');
     } else {
         filePath = path.join(__dirname, req.url);
     }
@@ -67,6 +69,7 @@ server.listen(port, () => {
     console.log('📁 Files available:');
     console.log('   http://localhost:3000/ - Palm Oil App (Database Version)');
     console.log('   http://localhost:3000/old - Palm Oil App (LocalStorage Version)');
+    console.log('   http://localhost:3000/db - Database Viewer (Admin)');
     console.log('🔗 API Server: http://localhost:3001');
     console.log('💡 กดปุ่ม Ctrl+C เพื่อหยุด server');
 });
