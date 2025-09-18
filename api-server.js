@@ -64,12 +64,13 @@ app.use(helmet({
                 "'self'",
                 "https://unpkg.com",
                 "https://cdn.jsdelivr.net",
+                "https://cdn.tailwindcss.com", // Allow Tailwind CSS
                 "https://unpkg.com/@babel/standalone/babel.min.js",
                 "'unsafe-inline'",
                 "'unsafe-eval'"
             ],
-            "style-src": ["'self'", "https://cdn.jsdelivr.net", "'unsafe-inline'"],
-            "connect-src": ["'self'"],
+            "style-src": ["'self'", "https://cdn.jsdelivr.net", "https://cdn.tailwindcss.com", "'unsafe-inline'"],
+            "connect-src": ["'self'", "https://unpkg.com"], // Allow connections to unpkg for source maps
         },
     },
 }));
