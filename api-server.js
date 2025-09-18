@@ -15,7 +15,7 @@ console.log('   GEMINI_API_KEY length:', process.env.GEMINI_API_KEY ? process.en
 console.log('   GEMINI_API_KEY starts with:', process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.substring(0, 10) + '...' : 'undefined');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 8080; // Railway uses PORT environment variable, fallback to 8080
 const JWT_SECRET = process.env.JWT_SECRET || 'palmoil-secret-key-2025';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'your-gemini-api-key-here';
 
@@ -49,11 +49,11 @@ app.use(helmet({
                 "https://unpkg.com/react@18/umd/react.development.js",
                 "https://unpkg.com/react-dom@18/umd/react-dom.development.js",
                 "https://unpkg.com/@babel/standalone/babel.min.js",
-                "https://unpkg.com/react-window@1.8.6/dist/umd/react-window.development.js",
-                "https://unpkg.com/chart.js@4.4.0/dist/chart.umd.js"
+                "https://unpkg.com/chart.js@4.4.0/dist/chart.umd.js",
+                "https://cdn.tailwindcss.com"
             ],
             imgSrc: ["'self'", "data:", "https:"],
-            connectSrc: ["'self'", "*.up.railway.app", "https://unpkg.com"], // Allow unpkg.com for .map files and remove localhost
+            connectSrc: ["'self'", "*.up.railway.app", "https://unpkg.com"], // Production support for Railway
             fontSrc: ["'self'", "https:", "data:"],
             objectSrc: ["'none'"],
             mediaSrc: ["'self'"],
@@ -61,7 +61,26 @@ app.use(helmet({
         },
     },
 }));
-app.use(cors());
+
+// CORS configuration for production
+const corsOptions = {
+    origin: function (origin, callback) {
+        // Allow requests with no origin (mobile apps, curl requests, etc.)
+        if (!origin) return callback(null, true);
+        
+        // Allow localhost for development
+        if (origin.includes('localhost')) return callback(null, true);
+        
+        // Allow Railway production domains
+        if (origin.includes('.up.railway.app')) return callback(null, true);
+        
+        // Deny other origins
+        callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true
+};
+
+app.use(cors(corsOptions));
 // Increase payload size limits for bulk imports (800+ rows CSV files)
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
