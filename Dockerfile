@@ -10,7 +10,7 @@ COPY . .
 
 # Build frontend
 WORKDIR /app/frontend
-RUN npm install
+RUN npm install --include=dev
 RUN npm run build
 
 # Back to root for backend
