@@ -87,17 +87,22 @@ app.use(express.static('public'));
 
 // --- Gemini AI Initialization ---
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+let genAI;
 
-// Initialize Gemini AI
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-
-// Check API key configuration
-if (!GEMINI_API_KEY || GEMINI_API_KEY === 'your-gemini-api-key-here' || GEMINI_API_KEY === 'AIzaSyD_your_actual_gemini_api_key_here') {
-    console.warn('⚠️  WARNING: GEMINI_API_KEY is not configured properly!');
-    console.warn('⚠️  Please set your actual Gemini API key in the .env file');
+// Check API key configuration before initializing
+if (!GEMINI_API_KEY || GEMINI_API_KEY === 'your-gemini-api-key-here') {
+    console.warn('⚠️  WARNING: GEMINI_API_KEY is not configured or is set to the default placeholder.');
+    console.warn('⚠️  The AI chat feature will be disabled.');
+    console.warn('⚠️  Please set your actual Gemini API key as an environment variable in Railway.');
     console.warn('⚠️  Get your key from: https://makersuite.google.com/app/apikey');
 } else {
-    console.log('✅ GEMINI_API_KEY is configured correctly');
+    try {
+        genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+        console.log('✅ Gemini AI initialized successfully.');
+    } catch (error) {
+        console.error('❌ CRITICAL: Failed to initialize Gemini AI. Check your API key and package installation.', error);
+        genAI = null; // Ensure genAI is null if initialization fails
+    }
 }
 
 // Authentication middleware
@@ -1496,6 +1501,14 @@ const parseThaiDate = (text) => {
 
 // Gemini AI Chat endpoint (Text-to-SQL Implementation)
 app.post('/api/chat', authenticateToken, async (req, res) => {
+    if (!genAI) {
+        console.error('AI chat endpoint called, but Gemini AI is not initialized.');
+        return res.status(503).json({ 
+            error: 'AI service unavailable',
+            message: 'AI service is not configured correctly on the server. Please contact the administrator.'
+        });
+    }
+
     try {
         const { message } = req.body;
         const user_id = req.user.userId;
