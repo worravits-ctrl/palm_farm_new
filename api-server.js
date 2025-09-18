@@ -4,6 +4,10 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const path = require('path');
 const fs = require('fs');
+const helmet = require('helmet');
+const cors = require('cors');
+const rateLimit = require('express-rate-limit');
+const bodyParser = require('body-parser');
 
 // --- Database Configuration ---
 const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_STATIC_URL;
@@ -34,9 +38,55 @@ const db = new sqlite3.Database(dbPath, (err) => {
 });
 
 const app = express();
+
+// --- App Configuration ---
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'palmoil-secret-key-2025';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'your-gemini-api-key-here';
+
+// --- Middleware Setup ---
+
+// 1. CORS
+app.use(cors());
+
+// 2. Body Parsers (for JSON and URL-encoded data)
+// Increased payload size limits for bulk imports
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json());
+
+// 3. Security Headers with Helmet
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+            "script-src": [
+                "'self'",
+                "https://unpkg.com",
+                "https://cdn.jsdelivr.net",
+                "https://unpkg.com/@babel/standalone/babel.min.js",
+                "'unsafe-inline'",
+                "'unsafe-eval'"
+            ],
+            "style-src": ["'self'", "https://cdn.jsdelivr.net", "'unsafe-inline'"],
+            "connect-src": ["'self'"],
+        },
+    },
+}));
+
+// 4. Rate Limiting
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 1000, // limit each IP to 1000 requests per windowMs
+    message: 'Too many requests from this IP, please try again after 15 minutes'
+});
+app.use('/api/', limiter); // Apply to all API routes
+
+// 5. Static Files
+app.use(express.static('public'));
+
+// --- Gemini AI Initialization ---
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // Initialize Gemini AI
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
@@ -49,46 +99,6 @@ if (!GEMINI_API_KEY || GEMINI_API_KEY === 'your-gemini-api-key-here' || GEMINI_A
 } else {
     console.log('✅ GEMINI_API_KEY is configured correctly');
 }
-
-// Middleware
-app.use(helmet({
-    contentSecurityPolicy: {
-        directives: {
-            defaultSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com"],
-            scriptSrc: [
-                "'self'", 
-                "'unsafe-inline'", 
-                "'unsafe-eval'",
-                "https://cdn.tailwindcss.com",
-                "https://unpkg.com",
-                "https://unpkg.com/react@18/umd/react.development.js",
-                "https://unpkg.com/react-dom@18/umd/react-dom.development.js",
-                "https://unpkg.com/@babel/standalone/babel.min.js"
-            ],
-            imgSrc: ["'self'", "data:", "https:"],
-            connectSrc: ["'self'"],
-            fontSrc: ["'self'", "https:", "data:"],
-            objectSrc: ["'none'"],
-            mediaSrc: ["'self'"],
-            frameSrc: ["'none'"],
-        },
-    },
-}));
-app.use(cors());
-// Increase payload size limits for bulk imports (800+ rows CSV files)
-app.use(bodyParser.json({ limit: '50mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
-
-// Rate limiting
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 1000 // limit each IP to 1000 requests per windowMs (increased for development)
-});
-app.use('/api/', limiter);
-
-// Static files
-app.use(express.static('public'));
 
 // Authentication middleware
 const authenticateToken = (req, res, next) => {
@@ -1687,9 +1697,7 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
     }
 });
 
-// Start server
+// Start the server
 app.listen(PORT, () => {
-    console.log(`🚀 Palm Oil API Server running on http://localhost:${PORT}`);
-    console.log(`📊 Database: ${dbPath}`);
-    console.log(`🔑 JWT Secret: ${JWT_SECRET.substring(0, 10)}...`);
+    console.log(`Server is running on port ${PORT}`);
 });
