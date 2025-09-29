@@ -781,13 +781,32 @@
             
             try {
               setLoading(true);
+              // คำนวณรายได้และกำไรใหม่
+              const totalWeight = parseFloat(formData.get('totalWeight'));
+              const pricePerKg = parseFloat(formData.get('pricePerKg'));
+              const fallenWeight = parseFloat(formData.get('fallenWeight')) || 0;
+              const fallenPricePerKg = parseFloat(formData.get('fallenPricePerKg')) || 0;
+              const harvestingCost = parseFloat(formData.get('harvestingCost'));
+              
+              // คำนวณรายได้รวม = (น้ำหนักปาล์มปกติ × ราคาปกติ) + (น้ำหนักปาล์มร่วง × ราคาปาล์มร่วง)
+              const normalRevenue = totalWeight * pricePerKg;
+              const fallenRevenue = fallenWeight * fallenPricePerKg;
+              const totalRevenue = normalRevenue + fallenRevenue;
+              
+              // กำไรสุทธิ = รายได้รวม - ค่าแรงงาน
+              const netProfit = totalRevenue - harvestingCost;
+              
               const result = await api.call('/harvest', {
                 method: 'POST',
                 body: JSON.stringify({
                   date: formData.get('date'),
-                  total_weight: parseFloat(formData.get('totalWeight')),
-                  price_per_kg: parseFloat(formData.get('pricePerKg')),
-                  harvesting_cost: parseFloat(formData.get('harvestingCost'))
+                  total_weight: totalWeight,
+                  price_per_kg: pricePerKg,
+                  fallen_weight: fallenWeight,
+                  fallen_price_per_kg: fallenPricePerKg,
+                  total_revenue: totalRevenue,
+                  harvesting_cost: harvestingCost,
+                  net_profit: netProfit
                 })
               });
               
@@ -843,11 +862,25 @@
               let data = {};
               
               if (editType === 'harvest') {
+                const totalWeight = parseFloat(formData.get('total_weight'));
+                const pricePerKg = parseFloat(formData.get('price_per_kg'));
+                const fallenWeight = parseFloat(formData.get('fallen_weight')) || 0;
+                const fallenPricePerKg = parseFloat(formData.get('fallen_price_per_kg')) || 0;
+                const harvestingCost = parseFloat(formData.get('harvesting_cost'));
+                
+                // คำนวณรายได้และกำไร
+                const normalRevenue = totalWeight * pricePerKg;
+                const fallenRevenue = fallenWeight * fallenPricePerKg;
+                const totalRevenue = normalRevenue + fallenRevenue;
+                const netProfit = totalRevenue - harvestingCost;
+                
                 data = {
                   date: formData.get('date'),
-                  total_weight: parseFloat(formData.get('total_weight')),
-                  price_per_kg: parseFloat(formData.get('price_per_kg')),
-                  harvesting_cost: parseFloat(formData.get('harvesting_cost'))
+                  total_weight: totalWeight,
+                  price_per_kg: pricePerKg,
+                  fallen_weight: fallenWeight,
+                  fallen_price_per_kg: fallenPricePerKg,
+                  harvesting_cost: harvestingCost
                 };
               }
               
@@ -1294,6 +1327,14 @@
                           <input type="number" name="pricePerKg" step="0.01" min="0" required disabled={loading} className="w-full p-2 border border-gray-300 rounded-lg disabled:opacity-50" />
                         </div>
                         <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">น้ำหนักปาล์มร่วง (กก.)</label>
+                          <input type="number" name="fallenWeight" step="0.1" min="0" defaultValue="0" disabled={loading} className="w-full p-2 border border-gray-300 rounded-lg disabled:opacity-50" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">ราคาปาล์มร่วงต่อกิโลกรัม (บาท)</label>
+                          <input type="number" name="fallenPricePerKg" step="0.01" min="0" defaultValue="0" disabled={loading} className="w-full p-2 border border-gray-300 rounded-lg disabled:opacity-50" />
+                        </div>
+                        <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">ค่าแรงงานเก็บเกี่ยว (บาท)</label>
                           <input type="number" name="harvestingCost" step="0.01" min="0" required disabled={loading} className="w-full p-2 border border-gray-300 rounded-lg disabled:opacity-50" />
                         </div>
@@ -1321,7 +1362,7 @@
                             📥 นำเข้า CSV
                           </label>
                           <button
-                            onClick={() => exportToCSV(harvestData, 'harvest_data', ['date', 'total_weight', 'price_per_kg', 'total_revenue', 'harvesting_cost', 'net_profit'])}
+                            onClick={() => exportToCSV(harvestData, 'harvest_data', ['date', 'total_weight', 'price_per_kg', 'fallen_weight', 'fallen_price_per_kg', 'total_revenue', 'harvesting_cost', 'net_profit'])}
                             className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors"
                           >
                             📤 ส่งออก CSV
@@ -1383,6 +1424,8 @@
                               </th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">น้ำหนัก (กก.)</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ราคา/กก.</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ปาล์มร่วง (กก.)</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ราคาร่วง/กก.</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">รายได้รวม</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ค่าแรงงาน</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">กำไรสุทธิ</th>
@@ -1398,6 +1441,8 @@
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(item.date)}</td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{parseFloat(item.total_weight).toFixed(1)}</td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{parseFloat(item.price_per_kg).toFixed(2)}</td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-orange-600">{parseFloat(item.fallen_weight || 0).toFixed(1)}</td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-orange-600">{parseFloat(item.fallen_price_per_kg || 0).toFixed(2)}</td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">{parseFloat(item.total_revenue).toLocaleString()}</td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-medium">{parseFloat(item.harvesting_cost).toLocaleString()}</td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium">{parseFloat(item.net_profit).toLocaleString()}</td>
@@ -1470,6 +1515,28 @@
                                 min="0" 
                                 defaultValue={editingItem?.price_per_kg} 
                                 required 
+                                className="w-full p-2 border border-gray-300 rounded-lg" 
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">น้ำหนักปาล์มร่วง (กก.)</label>
+                              <input 
+                                type="number" 
+                                name="fallen_weight" 
+                                step="0.1" 
+                                min="0" 
+                                defaultValue={editingItem?.fallen_weight || 0} 
+                                className="w-full p-2 border border-gray-300 rounded-lg" 
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">ราคาปาล์มร่วงต่อกิโลกรัม (บาท)</label>
+                              <input 
+                                type="number" 
+                                name="fallen_price_per_kg" 
+                                step="0.01" 
+                                min="0" 
+                                defaultValue={editingItem?.fallen_price_per_kg || 0} 
                                 className="w-full p-2 border border-gray-300 rounded-lg" 
                               />
                             </div>

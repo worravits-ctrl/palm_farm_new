@@ -10,9 +10,9 @@ const server = http.createServer((req, res) => {
     // Handle different routes
     let filePath;
     if (req.url === '/' || req.url === '/index.html') {
-        filePath = path.join(__dirname, 'palm-oil-database-app.html');
+        filePath = path.join(__dirname, 'public', 'palm-oil-database-app.html');
     } else if (req.url === '/app') {
-        filePath = path.join(__dirname, 'palm-oil-database-app.html');
+        filePath = path.join(__dirname, 'public', 'palm-oil-database-app.html');
     } else if (req.url === '/old') {
         filePath = path.join(__dirname, 'palm-oil-app.html');
     } else if (req.url === '/db' || req.url === '/db-viewer') {

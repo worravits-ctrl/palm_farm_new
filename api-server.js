@@ -462,21 +462,49 @@ app.get('/api/harvest', authenticateToken, (req, res) => {
 
 // Add harvest data
 app.post('/api/harvest', authenticateToken, (req, res) => {
-    const { date, total_weight, price_per_kg, harvesting_cost } = req.body;
+    const { 
+        date, 
+        total_weight, 
+        price_per_kg, 
+        fallen_weight = 0, 
+        fallen_price_per_kg = 0, 
+        total_revenue, 
+        harvesting_cost,
+        net_profit 
+    } = req.body;
+    
     const user_id = req.user.userId;
 
-    console.log('POST /api/harvest - User:', req.user.email, 'UserId:', user_id, 'Data:', { date, total_weight, price_per_kg, harvesting_cost });
+    console.log('POST /api/harvest - User:', req.user.email, 'UserId:', user_id, 'Data:', { 
+        date, total_weight, price_per_kg, fallen_weight, fallen_price_per_kg, total_revenue, harvesting_cost, net_profit 
+    });
 
-    if (!date || !total_weight || !price_per_kg || !harvesting_cost) {
-        return res.status(400).json({ error: 'All fields are required' });
+    if (!date || !total_weight || !price_per_kg || harvesting_cost === undefined) {
+        return res.status(400).json({ error: 'Required fields: date, total_weight, price_per_kg, harvesting_cost' });
     }
 
-    const total_revenue = total_weight * price_per_kg;
-    const net_profit = total_revenue - harvesting_cost;
+    // ใช้ค่าที่คำนวณมาจาก frontend หรือคำนวณใหม่ถ้าไม่มี
+    let calculatedTotalRevenue = total_revenue;
+    let calculatedNetProfit = net_profit;
+    
+    if (!calculatedTotalRevenue || !calculatedNetProfit) {
+        const normalRevenue = total_weight * price_per_kg;
+        const fallenRevenue = (fallen_weight || 0) * (fallen_price_per_kg || 0);
+        calculatedTotalRevenue = normalRevenue + fallenRevenue;
+        calculatedNetProfit = calculatedTotalRevenue - harvesting_cost;
+    }
 
     db.run(
-        'INSERT INTO harvest_data (user_id, date, total_weight, price_per_kg, total_revenue, harvesting_cost, net_profit) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [user_id, date, total_weight, price_per_kg, total_revenue, harvesting_cost, net_profit],
+        `INSERT INTO harvest_data (
+            user_id, date, total_weight, price_per_kg, 
+            fallen_weight, fallen_price_per_kg, 
+            total_revenue, harvesting_cost, net_profit
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+            user_id, date, total_weight, price_per_kg, 
+            fallen_weight || 0, fallen_price_per_kg || 0,
+            calculatedTotalRevenue, harvesting_cost, calculatedNetProfit
+        ],
         function(err) {
             if (err) {
                 console.error('Database error inserting harvest:', err);
@@ -486,7 +514,12 @@ app.post('/api/harvest', authenticateToken, (req, res) => {
             console.log('Harvest data inserted successfully with ID:', this.lastID, 'for user:', req.user.email);
             res.status(201).json({
                 id: this.lastID,
-                message: 'Harvest data added successfully'
+                message: 'Harvest data added successfully',
+                data: {
+                    total_revenue: calculatedTotalRevenue,
+                    net_profit: calculatedNetProfit,
+                    fallen_revenue: (fallen_weight || 0) * (fallen_price_per_kg || 0)
+                }
             });
         }
     );
@@ -495,14 +528,24 @@ app.post('/api/harvest', authenticateToken, (req, res) => {
 // Update harvest data
 app.put('/api/harvest/:id', authenticateToken, (req, res) => {
     const { id } = req.params;
-    const { date, total_weight, price_per_kg, harvesting_cost } = req.body;
+    const { 
+        date, 
+        total_weight, 
+        price_per_kg, 
+        fallen_weight = 0, 
+        fallen_price_per_kg = 0, 
+        harvesting_cost 
+    } = req.body;
     const user_id = req.user.userId;
 
-    if (!date || !total_weight || !price_per_kg || !harvesting_cost) {
-        return res.status(400).json({ error: 'All fields are required' });
+    if (!date || !total_weight || !price_per_kg || harvesting_cost === undefined) {
+        return res.status(400).json({ error: 'Required fields: date, total_weight, price_per_kg, harvesting_cost' });
     }
 
-    const total_revenue = total_weight * price_per_kg;
+    // คำนวณรายได้และกำไรใหม่
+    const normalRevenue = total_weight * price_per_kg;
+    const fallenRevenue = (fallen_weight || 0) * (fallen_price_per_kg || 0);
+    const total_revenue = normalRevenue + fallenRevenue;
     const net_profit = total_revenue - harvesting_cost;
 
     // Check if user owns this record or is admin
@@ -520,13 +563,28 @@ app.put('/api/harvest/:id', authenticateToken, (req, res) => {
         }
 
         db.run(
-            'UPDATE harvest_data SET date = ?, total_weight = ?, price_per_kg = ?, total_revenue = ?, harvesting_cost = ?, net_profit = ? WHERE id = ?',
-            [date, total_weight, price_per_kg, total_revenue, harvesting_cost, net_profit, id],
+            `UPDATE harvest_data SET 
+                date = ?, total_weight = ?, price_per_kg = ?, 
+                fallen_weight = ?, fallen_price_per_kg = ?,
+                total_revenue = ?, harvesting_cost = ?, net_profit = ? 
+            WHERE id = ?`,
+            [
+                date, total_weight, price_per_kg, 
+                fallen_weight || 0, fallen_price_per_kg || 0,
+                total_revenue, harvesting_cost, net_profit, id
+            ],
             function(err) {
                 if (err) {
                     return res.status(500).json({ error: 'Database error' });
                 }
-                res.json({ message: 'Harvest data updated successfully' });
+                res.json({ 
+                    message: 'Harvest data updated successfully',
+                    data: {
+                        total_revenue,
+                        net_profit,
+                        fallen_revenue: (fallen_weight || 0) * (fallen_price_per_kg || 0)
+                    }
+                });
             }
         );
     });
