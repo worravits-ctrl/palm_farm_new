@@ -7,29 +7,15 @@ const bodyParser = require('body-parser');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const OfflineSearchEngine = require('./OfflineSearchEngine');
 require('dotenv').config();
-console.log('🔍 Environment variables loaded:');
-console.log('   GEMINI_API_KEY exists:', !!process.env.GEMINI_API_KEY);
-console.log('   GEMINI_API_KEY length:', process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.length : 0);
-console.log('   GEMINI_API_KEY starts with:', process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.substring(0, 10) + '...' : 'undefined');
 
 const app = express();
 const PORT = process.env.PORT || 3001; // For local development, use 3001, Railway will override with PORT env var
 const JWT_SECRET = process.env.JWT_SECRET || 'palmoil-secret-key-2025';
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'your-gemini-api-key-here';
 
-// Initialize Gemini AI
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-
-// Check API key configuration
-if (!GEMINI_API_KEY || GEMINI_API_KEY === 'your-gemini-api-key-here' || GEMINI_API_KEY === 'AIzaSyD_your_actual_gemini_api_key_here') {
-    console.warn('⚠️  WARNING: GEMINI_API_KEY is not configured properly!');
-    console.warn('⚠️  Please set your actual Gemini API key in the .env file');
-    console.warn('⚠️  Get your key from: https://makersuite.google.com/app/apikey');
-} else {
-    console.log('✅ GEMINI_API_KEY is configured correctly');
-}
+console.log('🔍 Starting Palm Oil API Server...');
+console.log('📴 Using Offline Search Engine (No external API required)');
 
 // Database connection
 const dbPath = path.join(__dirname, 'database', 'palmoil.db');
@@ -125,7 +111,7 @@ app.get('/api/health', (req, res) => {
     res.json({ 
         status: 'OK', 
         timestamp: new Date().toISOString(),
-        geminiApiConfigured: !!GEMINI_API_KEY && GEMINI_API_KEY !== 'your-gemini-api-key-here'
+        searchMode: 'offline'
     });
 });
 
@@ -136,9 +122,9 @@ app.get('/api/status', (req, res) => {
         version: '1.0.0',
         status: 'running',
         port: PORT,
-        gemini: {
-            configured: !!GEMINI_API_KEY && GEMINI_API_KEY !== 'your-gemini-api-key-here',
-            keyLength: GEMINI_API_KEY ? GEMINI_API_KEY.length : 0
+        search: {
+            mode: 'offline',
+            description: 'Using local pattern-based search engine'
         },
         database: {
             path: dbPath
@@ -1510,68 +1496,11 @@ app.get('/:filename.html', (req, res) => {
     });
 });
 
-// --- Helper Function for Date Parsing ---
-const parseThaiDate = (text) => {
-    const now = new Date();
-    let year = now.getFullYear();
-    let month = now.getMonth(); // 0-11
-    let startDate, endDate;
-
-    const thaiMonths = {
-        'มกราคม': 0, 'กุมภาพันธ์': 1, 'มีนาคม': 2, 'เมษายน': 3, 'พฤษภาคม': 4, 'มิถุนายน': 5,
-        'กรกฎาคม': 6, 'สิงหาคม': 7, 'กันยายน': 8, 'ตุลาคม': 9, 'พฤศจิกายน': 10, 'ธันวาคม': 11
-    };
-
-    // Yearly patterns
-    if (text.includes('ปีที่แล้ว')) {
-        year -= 1;
-        startDate = new Date(year, 0, 1); // Jan 1st
-        endDate = new Date(year, 11, 31); // Dec 31st
-    } else if (text.includes('ปีนี้') || text.includes('ทั้งปี')) {
-        startDate = new Date(year, 0, 1);
-        endDate = new Date(year, 11, 31);
-    }
-    // Monthly patterns
-    else if (text.includes('เดือนที่แล้ว')) {
-        month -= 1;
-        if (month < 0) {
-            month = 11;
-            year -= 1;
-        }
-        startDate = new Date(year, month, 1);
-        endDate = new Date(year, month + 1, 0);
-    } else if (text.includes('เดือนนี้')) {
-        startDate = new Date(year, month, 1);
-        endDate = new Date(year, month + 1, 0);
-    }
-    // Specific month pattern
-    else {
-        const match = text.match(/(มกราคม|กุมภาพันธ์|มีนาคม|เมษายน|พฤษภาคม|มิถุนายน|กรกฎาคม|สิงหาคม|กันยายน|ตุลาคม|พฤศจิกายน|ธันวาคม)\s+(\d{4})/);
-        if (match) {
-            const thaiMonthName = match[1];
-            const buddhistYear = parseInt(match[2], 10);
-            
-            if (thaiMonths.hasOwnProperty(thaiMonthName) && buddhistYear > 2500) {
-                month = thaiMonths[thaiMonthName];
-                year = buddhistYear - 543;
-                startDate = new Date(year, month, 1);
-                endDate = new Date(year, month + 1, 0);
-            } else {
-                return null; // Not a valid pattern
-            }
-        } else {
-            return null; // No date pattern found
-        }
-    }
-
-    return {
-        startDate: startDate.toISOString().split('T')[0], // YYYY-MM-DD
-        endDate: endDate.toISOString().split('T')[0]      // YYYY-MM-DD
-    };
-};
 
 
-// Gemini AI Chat endpoint (Text-to-SQL Implementation)
+
+
+// Offline Chat endpoint (No external API required)
 app.post('/api/chat', authenticateToken, async (req, res) => {
     try {
         const { message } = req.body;
@@ -1581,234 +1510,410 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'Message is required' });
         }
 
-        console.log(`🤖 AI request from ${req.user.email} (User ID: ${user_id}): "${message}"`);
+        console.log(`🔍 Offline search request from ${req.user.email} (User ID: ${user_id}): "${message}"`);
+        console.log(`📍 DB Path: ${dbPath}`);
+        console.log(`🔤 Message toLowerCase: "${message.toLowerCase()}"`);
+        console.log(`🧪 Contains เก็บเกี่ยว: ${message.toLowerCase().includes('เก็บเกี่ยว')}`);
+        console.log(`🧪 Contains ต่อไป: ${message.toLowerCase().includes('ต่อไป')}`);
+        console.log(`🧪 Contains ปุ๋ย: ${message.toLowerCase().includes('ปุ๋ย')}`);
+        console.log(`🧪 Contains ล่าสุด: ${message.toLowerCase().includes('ล่าสุด')}`);
+        console.log(`🧪 Contains เมื่อไหร่: ${message.toLowerCase().includes('เมื่อไหร่')}`);
 
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
-        // --- New Step: Intent Classification ---
-        const intentPrompt = `
-            Classify the user's intent into one of the following categories: 'database_query', 'greeting', 'general_chitchat', 'next_harvest_query', 'date_query'.
-            - 'date_query': Asking about current date/time/calendar information (e.g., "วันนี้วันที่เท่าไหร่", "วันนี้วันอะไร", "เดือนนี้เดือนอะไร", "ปีนี้ปีอะไร", "เวลาเท่าไหร่", "ตอนนี้วันอะไร").
-            - 'database_query': Asks for specific farm data, numbers, summaries, or records from the database (e.g., "รายได้เท่าไหร่", "ใส่ปุ๋ยครั้งล่าสุด", "สรุปข้อมูลเดือนที่แล้ว", "ต้นไหนให้ผลเยอะ").
-            - 'greeting': Simple greetings (e.g., "สวัสดี", "ดีครับ", "hello").
-            - 'general_chitchat': Questions not related to the database or date (e.g., "สบายดีไหม", "คุณคือใคร").
-            - 'next_harvest_query': Asks about the next harvest date (e.g., "เก็บเกี่ยวครั้งต่อไปเมื่อไหร่", "ตัดปาล์มครั้งต่อไปเมื่อไหร่").
-
-            Important: Questions about "วันนี้วันที่เท่าไหร่" should be classified as 'date_query', NOT 'database_query'.
-
-            User message: "${message}"
-            
-            Respond with ONLY the intent category name:
-        `;
+        // Direct answer logic for specific questions
+        const questionLower = message.toLowerCase();
+        let answer;
         
-        console.log("--- Classifying Intent ---");
-        const intentResult = await model.generateContent(intentPrompt);
-        const intent = (await intentResult.response.text()).trim().toLowerCase();
-        console.log(`Detected Intent: ${intent}`);
-
-        // --- Handle non-database queries ---
-        if (intent.includes('greeting') || intent.includes('general_chitchat')) {
-            const friendlyResponsePrompt = `
-                You are a friendly and helpful AI assistant for a palm oil farm management app.
-                The user said: "${message}".
-                Respond in a warm, friendly, and concise manner in Thai. If it's a greeting, greet them back. If it's a simple question, provide a simple answer.
-            `;
-            const friendlyResult = await model.generateContent(friendlyResponsePrompt);
-            const friendlyMessage = (await friendlyResult.response.text()).trim();
+        // รายได้เดือนที่แล้วเท่าไหร่?
+        if (questionLower.includes('รายได้') && questionLower.includes('เดือนที่แล้ว')) {
+            console.log('💸 Detected last month revenue question');
             
-            console.log(`✅ Responding with friendly message: "${friendlyMessage}"`);
-            return res.json({
-                message: friendlyMessage,
-                timestamp: new Date().toISOString(),
-            });
-        }
-
-        // --- Handle date query ---
-        if (intent.includes('date_query')) {
-            const { context } = req.body; // Get context data from frontend
-            const today = new Date();
-            const thaiDate = today.toLocaleDateString('th-TH', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                weekday: 'long'
-            });
-            
-            const responseMessage = `วันนี้คือวัน${thaiDate} ครับ`;
-            console.log(`✅ Responding with current date: "${responseMessage}"`);
-            return res.json({
-                message: responseMessage,
-                timestamp: new Date().toISOString(),
-            });
-        }
-
-        // --- Handle next harvest query ---
-        if (intent.includes('next_harvest_query')) {
-            console.log("--- Intent is next_harvest_query, calculating next harvest date ---");
-            return new Promise((resolve, reject) => {
-                db.get('SELECT MAX(date) as last_harvest_date FROM harvest_data WHERE user_id = ?', [user_id], (err, row) => {
+            answer = await new Promise((resolve, reject) => {
+                const today = new Date();
+                const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+                
+                const query = `
+                    SELECT 
+                        SUM(total_revenue) as total_revenue,
+                        SUM(total_weight) as total_weight,
+                        COUNT(*) as total_harvests
+                    FROM harvest_data 
+                    WHERE user_id = ? AND date BETWEEN ? AND ?
+                `;
+                
+                db.get(query, [user_id, 
+                    lastMonth.toISOString().split('T')[0],
+                    lastMonthEnd.toISOString().split('T')[0]
+                ], (err, row) => {
                     if (err) {
-                        console.error('Error fetching last harvest date:', err);
-                        return res.status(500).json({ error: 'Database error' });
+                        reject(err);
+                        return;
+                    }
+                    
+                    const monthName = lastMonth.toLocaleDateString('th-TH', { 
+                        year: 'numeric', 
+                        month: 'long' 
+                    });
+                    
+                    if (!row.total_revenue || row.total_revenue === 0) {
+                        resolve(`ไม่มีข้อมูลรายได้ในเดือน${monthName}`);
+                    } else {
+                        resolve(`รายได้เดือน${monthName}: ${Number(row.total_revenue).toLocaleString()} บาท จากการเก็บเกี่ยว ${row.total_harvests} ครั้ง`);
+                    }
+                });
+            });
+            
+        // น้ำหนักรวมเดือนนี้เท่าไหร่
+        } else if (questionLower.includes('น้ำหนักรวม') && questionLower.includes('เดือนนี้')) {
+            console.log('⚖️ Detected this month weight question');
+            
+            answer = await new Promise((resolve, reject) => {
+                const today = new Date();
+                const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+                const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+                
+                const query = `
+                    SELECT 
+                        SUM(total_weight) as total_weight,
+                        SUM(fallen_weight) as fallen_weight,
+                        COUNT(*) as total_harvests
+                    FROM harvest_data 
+                    WHERE user_id = ? AND date BETWEEN ? AND ?
+                `;
+                
+                db.get(query, [user_id,
+                    firstDay.toISOString().split('T')[0],
+                    lastDay.toISOString().split('T')[0]
+                ], (err, row) => {
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+                    
+                    const monthName = today.toLocaleDateString('th-TH', { 
+                        year: 'numeric', 
+                        month: 'long' 
+                    });
+                    
+                    const totalWeight = (row.total_weight || 0);
+                    const fallenWeight = (row.fallen_weight || 0);
+                    const grandTotal = totalWeight + fallenWeight;
+                    
+                    if (grandTotal === 0) {
+                        resolve(`ไม่มีข้อมูลการเก็บเกี่ยวในเดือน${monthName}`);
+                    } else {
+                        let message = `น้ำหนักรวมเดือน${monthName}: ${grandTotal.toLocaleString()} กิโลกรัม`;
+                        message += `\n• น้ำหนักปาล์มปกติ: ${totalWeight.toLocaleString()} กิโลกรัม`;
+                        if (fallenWeight > 0) {
+                            message += `\n• น้ำหนักปาล์มร่วง: ${fallenWeight.toLocaleString()} กิโลกรัม`;
+                        }
+                        message += `\nจากการเก็บเกี่ยว ${row.total_harvests} ครั้ง`;
+                        resolve(message);
+                    }
+                });
+            });
+            
+        // น้ำหนักรวมเดือนที่แล้วเท่าไหร่
+        } else if (questionLower.includes('น้ำหนักรวม') && questionLower.includes('เดือนที่แล้ว')) {
+            console.log('📊 Detected last month weight question');
+            
+            answer = await new Promise((resolve, reject) => {
+                const today = new Date();
+                const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+                
+                const query = `
+                    SELECT 
+                        SUM(total_weight) as total_weight,
+                        SUM(fallen_weight) as fallen_weight,
+                        COUNT(*) as total_harvests
+                    FROM harvest_data 
+                    WHERE user_id = ? AND date BETWEEN ? AND ?
+                `;
+                
+                db.get(query, [user_id,
+                    lastMonth.toISOString().split('T')[0],
+                    lastMonthEnd.toISOString().split('T')[0]
+                ], (err, row) => {
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+                    
+                    const monthName = lastMonth.toLocaleDateString('th-TH', { 
+                        year: 'numeric', 
+                        month: 'long' 
+                    });
+                    
+                    const totalWeight = (row.total_weight || 0);
+                    const fallenWeight = (row.fallen_weight || 0);
+                    const grandTotal = totalWeight + fallenWeight;
+                    
+                    if (grandTotal === 0) {
+                        resolve(`ไม่มีข้อมูลการเก็บเกี่ยวในเดือน${monthName}`);
+                    } else {
+                        let message = `น้ำหนักรวมเดือน${monthName}: ${grandTotal.toLocaleString()} กิโลกรัม`;
+                        message += `\n• น้ำหนักปาล์มปกติ: ${totalWeight.toLocaleString()} กิโลกรัม`;
+                        if (fallenWeight > 0) {
+                            message += `\n• น้ำหนักปาล์มร่วง: ${fallenWeight.toLocaleString()} กิโลกรัม`;
+                        }
+                        message += `\nจากการเก็บเกี่ยว ${row.total_harvests} ครั้ง`;
+                        resolve(message);
+                    }
+                });
+            });
+            
+        // ราคาเฉลี่ยต่อกิโลกรัมเดือนนี้เท่าไหร่
+        } else if (questionLower.includes('ราคาเฉลี่ย') && questionLower.includes('เดือนนี้')) {
+            console.log('💲 Detected this month average price question');
+            
+            answer = await new Promise((resolve, reject) => {
+                const today = new Date();
+                const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+                const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+                
+                const query = `
+                    SELECT 
+                        AVG(price_per_kg) as avg_price,
+                        MIN(price_per_kg) as min_price,
+                        MAX(price_per_kg) as max_price,
+                        COUNT(*) as total_harvests
+                    FROM harvest_data 
+                    WHERE user_id = ? AND date BETWEEN ? AND ? AND total_weight > 0
+                `;
+                
+                db.get(query, [user_id,
+                    firstDay.toISOString().split('T')[0],
+                    lastDay.toISOString().split('T')[0]
+                ], (err, row) => {
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+                    
+                    const monthName = today.toLocaleDateString('th-TH', { 
+                        year: 'numeric', 
+                        month: 'long' 
+                    });
+                    
+                    if (!row.avg_price || row.total_harvests === 0) {
+                        resolve(`ไม่มีข้อมูลราคาในเดือน${monthName}`);
+                    } else {
+                        let message = `ราคาเฉลี่ยเดือน${monthName}: ${Number(row.avg_price).toFixed(2)} บาท/กิโลกรัม`;
+                        message += `\n• ราคาต่ำสุด: ${Number(row.min_price).toFixed(2)} บาท/กิโลกรัม`;
+                        message += `\n• ราคาสูงสุด: ${Number(row.max_price).toFixed(2)} บาท/กิโลกรัม`;
+                        message += `\nจากข้อมูล ${row.total_harvests} ครั้ง`;
+                        resolve(message);
+                    }
+                });
+            });
+            
+        // ราคาเฉลี่ยต่อกิโลกรัมเดือนที่แล้วเท่าไหร่
+        } else if (questionLower.includes('ราคาเฉลี่ย') && questionLower.includes('เดือนที่แล้ว')) {
+            console.log('📈 Detected last month average price question');
+            
+            answer = await new Promise((resolve, reject) => {
+                const today = new Date();
+                const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+                
+                const query = `
+                    SELECT 
+                        AVG(price_per_kg) as avg_price,
+                        MIN(price_per_kg) as min_price,
+                        MAX(price_per_kg) as max_price,
+                        COUNT(*) as total_harvests
+                    FROM harvest_data 
+                    WHERE user_id = ? AND date BETWEEN ? AND ? AND total_weight > 0
+                `;
+                
+                db.get(query, [user_id,
+                    lastMonth.toISOString().split('T')[0],
+                    lastMonthEnd.toISOString().split('T')[0]
+                ], (err, row) => {
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+                    
+                    const monthName = lastMonth.toLocaleDateString('th-TH', { 
+                        year: 'numeric', 
+                        month: 'long' 
+                    });
+                    
+                    if (!row.avg_price || row.total_harvests === 0) {
+                        resolve(`ไม่มีข้อมูลราคาในเดือน${monthName}`);
+                    } else {
+                        let message = `ราคาเฉลี่ยเดือน${monthName}: ${Number(row.avg_price).toFixed(2)} บาท/กิโลกรัม`;
+                        message += `\n• ราคาต่ำสุด: ${Number(row.min_price).toFixed(2)} บาท/กิโลกรัม`;
+                        message += `\n• ราคาสูงสุด: ${Number(row.max_price).toFixed(2)} บาท/กิโลกรัม`;
+                        message += `\nจากข้อมูล ${row.total_harvests} ครั้ง`;
+                        resolve(message);
+                    }
+                });
+            });
+            
+        } else if (questionLower.includes('ปุ๋ย') && (questionLower.includes('ครั้งล่าสุด') || questionLower.includes('ล่าสุด')) && questionLower.includes('เมื่อไหร่')) {
+            console.log('🌱 Detected last fertilizer question');
+            
+            // ค้นหาข้อมูลการใส่ปุ๋ยครั้งล่าสุด
+            answer = await new Promise((resolve, reject) => {
+                const query = `
+                    SELECT date, fertilizer_type, amount, total_cost, labor_cost
+                    FROM fertilizer_data 
+                    WHERE user_id = ? 
+                    ORDER BY date DESC 
+                    LIMIT 1
+                `;
+
+                db.get(query, [user_id], (err, row) => {
+                    if (err) {
+                        reject(err);
+                        return;
                     }
 
-                    if (row && row.last_harvest_date) {
-                        const lastHarvestDate = new Date(row.last_harvest_date);
-                        lastHarvestDate.setDate(lastHarvestDate.getDate() + 15);
+                    if (!row) {
+                        resolve("ไม่พบข้อมูลการใส่ปุ๋ยในระบบ");
+                        return;
+                    }
+
+                    try {
+                        // แปลงวันที่จากฐานข้อมูล (YYYY-MM-DD)
+                        const fertilizerDate = new Date(row.date);
                         
-                        const nextHarvestDate = lastHarvestDate.toLocaleDateString('th-TH', {
+                        // แปลงเป็นรูปแบบไทย
+                        const thaiDate = fertilizerDate.toLocaleDateString('th-TH', {
                             year: 'numeric',
                             month: 'long',
                             day: 'numeric',
+                            weekday: 'long'
                         });
-
-                        const responseMessage = `การเก็บเกี่ยวครั้งต่อไปคาดว่าจะประมาณวันที่ ${nextHarvestDate} ครับ`;
-                        console.log(`✅ Responding with next harvest date: "${responseMessage}"`);
-                        res.json({
-                            message: responseMessage,
-                            timestamp: new Date().toISOString(),
-                        });
-                    } else {
-                        const responseMessage = "ไม่พบข้อมูลการเก็บเกี่ยวครั้งล่าสุดในระบบครับ";
-                        console.log(`✅ Responding with no last harvest date: "${responseMessage}"`);
-                        res.json({
-                            message: responseMessage,
-                            timestamp: new Date().toISOString(),
-                        });
+                        
+                        // คำนวณจำนวนวันที่ผ่านมา
+                        const today = new Date();
+                        const diffTime = today - fertilizerDate;
+                        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                        
+                        let message = `ใส่ปุ๋ยครั้งล่าสุด: วัน${thaiDate}`;
+                        
+                        if (diffDays === 0) {
+                            message += ` (วันนี้)`;
+                        } else if (diffDays === 1) {
+                            message += ` (เมื่อวาน)`;
+                        } else {
+                            message += ` (${diffDays} วันที่แล้ว)`;
+                        }
+                        
+                        // เพิ่มรายละเอียดปุ๋ย
+                        message += `\n\nรายละเอียด:`;
+                        message += `\n• ปุ๋ยที่ใช้: ${row.fertilizer_type}`;
+                        message += `\n• ปริมาณ: ${row.amount} กระสอบ`;
+                        message += `\n• ค่าปุ๋ย: ${Number(row.total_cost).toLocaleString()} บาท`;
+                        
+                        if (row.labor_cost && row.labor_cost > 0) {
+                            message += `\n• ค่าแรงงาน: ${Number(row.labor_cost).toLocaleString()} บาท`;
+                            const totalCost = Number(row.total_cost) + Number(row.labor_cost);
+                            message += `\n• รวมทั้งหมด: ${totalCost.toLocaleString()} บาท`;
+                        }
+                        
+                        resolve(message);
+                        
+                    } catch (error) {
+                        resolve(`เกิดข้อผิดพลาดในการดึงข้อมูลปุ๋ย: ${error.message}`);
                     }
                 });
             });
-        }
-
-        // --- Proceed with Text-to-SQL for database queries ---
-        console.log("--- Intent is database_query, proceeding with Text-to-SQL ---");
-
-        // --- Pre-process the message to find a date range ---
-        const dateRange = parseThaiDate(message);
-        let dateFilterContext = '';
-        if (dateRange) {
-            dateFilterContext = `The user is asking about a specific date range. Use the following condition for filtering: "date BETWEEN '${dateRange.startDate}' AND '${dateRange.endDate}'".`;
-        }
-
-        // --- 1. Define Database Schema for the AI ---
-        const dbSchema = `
-            CREATE TABLE users (id INTEGER, username TEXT, email TEXT, role TEXT);
-            CREATE TABLE harvest_data (id INTEGER, user_id INTEGER, date TEXT, total_weight REAL, price_per_kg REAL, total_revenue REAL, harvesting_cost REAL, net_profit REAL);
-            CREATE TABLE fertilizer_data (id INTEGER, user_id INTEGER, date TEXT, fertilizer_type TEXT, amount INTEGER, cost_per_bag REAL, labor_cost REAL, total_cost REAL, supplier TEXT, notes TEXT);
-            CREATE TABLE palm_tree_data (id INTEGER, user_id INTEGER, harvest_date TEXT, tree_id TEXT, bunch_count INTEGER, notes TEXT);
-            CREATE TABLE notes_data (id INTEGER, user_id INTEGER, date TEXT, title TEXT, content TEXT);
-        `;
-
-        // --- First AI Call: Generate SQL from User's Question ---
-        const sqlGenerationPrompt = `
-            Based on the database schema below, write a single SQLite query to answer the user's question.
-
-            Schema:
-            ${dbSchema}
-
-            ---
-            Query Examples:
-            - User Question: "A14 ตัดไปแล้วเท่าไหร่" (How much has A14 been cut for?) or "รหัสต้นไม้ A14 มีการเก็บเกี่ยวแล้วกี่ทะลาย" (How many bunches has tree A14 been harvested for?)
-              SQL Query: SELECT SUM(bunch_count) as total_bunches FROM palm_tree_data WHERE user_id = ${user_id} AND tree_id = 'A14';
-
-            - User Question: "ต้นไหนให้ผลผลิตเยอะที่สุด" (Which tree has the highest yield?)
-              SQL Query: SELECT tree_id, SUM(bunch_count) as total_bunches FROM palm_tree_data WHERE user_id = ${user_id} GROUP BY tree_id ORDER BY total_bunches DESC LIMIT 1;
-            ---
-
-            Important Rules:
-            - **ALWAYS filter every query by the user's ID using "user_id = ${user_id}"**. This is a critical security requirement.
-            - The current date is ${new Date().toISOString().split('T')[0]}.
-            - ${dateFilterContext || 'Use standard SQLite date functions like date() and strftime() for any date operations.'}
-            - For questions about "ครั้งก่อน" หรือ "ล่าสุด" (latest/last time), use ORDER BY date DESC or ORDER BY harvest_date DESC LIMIT 1.
-            - Do not query the users table for personal data like email or password.
-            - Respond with only the SQL query, nothing else.
-
-            User Question: "${message}"
             
-            SQL Query:
-        `;
+        } else if (questionLower.includes('เก็บเกี่ยว') && (questionLower.includes('ครั้งต่อไป') || questionLower.includes('ต่อไป') || questionLower.includes('เมื่อไหร่'))) {
+            console.log('🎯 Detected next harvest question');
+            
+            // คำนวณวันเก็บเกี่ยวครั้งต่อไป
+            answer = await new Promise((resolve, reject) => {
+                const query = `
+                    SELECT date as last_harvest_date 
+                    FROM harvest_data 
+                    WHERE user_id = ? 
+                    ORDER BY date DESC 
+                    LIMIT 1
+                `;
 
-        console.log("--- Generating SQL Query ---");
-        const sqlResult = await model.generateContent(sqlGenerationPrompt);
-        const sqlQuery = (await sqlResult.response.text()).trim().replace(/`/g, '').replace(/sql/gi, '').trim();
+                db.get(query, [user_id], (err, row) => {
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
 
-        console.log(`Generated SQL: ${sqlQuery}`);
+                    if (!row) {
+                        resolve("ไม่พบข้อมูลการเก็บเกี่ยวก่อนหน้า แนะนำให้เก็บเกี่ยวเมื่อผลปาล์มสุก (ประมาณทุก 15-20 วัน)");
+                        return;
+                    }
 
-        // Basic validation to prevent harmful queries
-        if (!sqlQuery.toUpperCase().startsWith('SELECT')) {
-            console.error("Validation failed: AI did not return a valid SELECT query.");
-            // Fallback for when AI fails to generate SQL for a query-like question
-            return res.json({ message: "ขออภัยครับ ผมไม่เข้าใจคำถามเกี่ยวกับข้อมูลที่คุณต้องการ ลองถามในรูปแบบอื่นได้ไหมครับ" });
-        }
-        if (!sqlQuery.includes(`user_id = ${user_id}`)) {
-             console.error("Validation failed: Query is missing user_id filter.");
-             return res.status(400).json({ message: "ไม่สามารถประมวลผลคำถามได้หรือไม่ได้รับอนุญาต" });
-        }
-
-        // --- 3. Execute the Generated SQL Query ---
-        const dbQuery = (sql) => {
-            return new Promise((resolve, reject) => {
-                db.all(sql, [], (err, rows) => {
-                    if (err) reject(err);
-                    else resolve(rows);
+                    try {
+                        // แปลงวันที่จากฐานข้อมูล (YYYY-MM-DD)
+                        const lastHarvestDate = new Date(row.last_harvest_date);
+                        
+                        // บวก 15 วัน
+                        const nextHarvestDate = new Date(lastHarvestDate);
+                        nextHarvestDate.setDate(lastHarvestDate.getDate() + 15);
+                        
+                        // แปลงเป็นรูปแบบไทย
+                        const thaiDate = nextHarvestDate.toLocaleDateString('th-TH', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            weekday: 'long'
+                        });
+                        
+                        // คำนวณจำนวนวันที่เหลือ
+                        const today = new Date();
+                        const diffTime = nextHarvestDate - today;
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        
+                        let message = `เก็บเกี่ยวครั้งต่อไป: วัน${thaiDate}`;
+                        
+                        if (diffDays > 0) {
+                            message += ` (อีก ${diffDays} วัน)`;
+                        } else if (diffDays === 0) {
+                            message += ` (วันนี้!)`;
+                        } else {
+                            message += ` (เลยกำหนดแล้ว ${Math.abs(diffDays)} วัน)`;
+                        }
+                        
+                        // เพิ่มข้อมูลการเก็บเกี่ยวล่าสุด
+                        const lastHarvestThai = lastHarvestDate.toLocaleDateString('th-TH', {
+                            year: 'numeric',
+                            month: 'long', 
+                            day: 'numeric'
+                        });
+                        message += `\n\nเก็บเกี่ยวครั้งล่าสุด: ${lastHarvestThai}`;
+                        
+                        resolve(message);
+                        
+                    } catch (error) {
+                        resolve(`เกิดข้อผิดพลาดในการคำนวณวันที่: ${error.message}`);
+                    }
                 });
             });
-        };
+            
+        } else {
+            // ใช้ OfflineSearchEngine สำหรับคำถามอื่นๆ
+            const OfflineSearchEngine = require('./OfflineSearchEngine');
+            const searchEngine = new OfflineSearchEngine(dbPath);
+            answer = await searchEngine.answerQuestion(message, user_id);
+        }
 
-        console.log("--- Executing SQL Query ---");
-        const queryResult = await dbQuery(sqlQuery);
-        console.log("Query Result:", queryResult);
-
-        // --- 4. Second AI Call: Summarize the Result in Thai ---
-        const { context } = req.body; // Get context data from frontend
-        const currentDateInfo = context ? `
-            Current Date Information:
-            - Today: ${context.currentDate || 'ไม่ทราบ'}
-            - Date (ISO): ${context.currentDateISO || new Date().toISOString().split('T')[0]}
-            - Current Year: ${context.currentYear || new Date().getFullYear()} (Buddhist Year: ${context.buddhistYear || new Date().getFullYear() + 543})
-            - Current Month: ${context.currentMonth || new Date().getMonth() + 1}
-            - User: ${context.userName || 'ผู้ใช้'}
-        ` : '';
-        
-        const summarizationPrompt = `
-            You are a helpful AI assistant for a palm oil farm management system. Your task is to answer the user's question based on the data provided.
-
-            ${currentDateInfo}
-
-            User's Original Question: "${message}"
-
-            Data from the database (in JSON format):
-            ${JSON.stringify(queryResult, null, 2)}
-
-            Instructions:
-            - Answer in Thai language.
-            - Be concise, clear, and friendly.
-            - Use the current date information to provide context-aware answers.
-            - When user asks about "วันนี้" (today), "เดือนนี้" (this month), "ปีนี้" (this year), use the current date provided above.
-            - If the data is empty or doesn't answer the question, say "ไม่พบข้อมูลที่เกี่ยวข้อง".
-            - Format numbers with Thai number formatting (add commas, use บาท for currency).
-            - Format dates in Thai style (DD/MM/YYYY with Buddhist era when appropriate).
-            - Do not show the user the raw JSON data.
-            - Summarize the data to directly answer the user's question.
-            - If user asks about current date/time, refer to the current date information provided.
-        `;
-
-        console.log("--- Summarizing Result ---");
-        const summaryResult = await model.generateContent(summarizationPrompt);
-        const finalAnswer = (await summaryResult.response.text()).trim();
-
-        console.log(`✅ Final Answer: "${finalAnswer}"`);
+        console.log(`✅ Offline answer: "${answer}"`);
 
         res.json({
-            message: finalAnswer,
+            message: answer,
             timestamp: new Date().toISOString(),
         });
 
     } catch (error) {
-        console.error('❌ AI Text-to-SQL error:', error);
+        console.error('❌ Offline search error:', error);
         res.status(500).json({
-            error: 'AI service error',
-            message: 'เกิดข้อผิดพลาดในการประมวลผลคำถามด้วย AI'
+            error: 'Search service error',
+            message: 'เกิดข้อผิดพลาดในการค้นหาข้อมูล'
         });
     }
 });

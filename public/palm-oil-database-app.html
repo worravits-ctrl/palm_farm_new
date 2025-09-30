@@ -92,26 +92,49 @@
             ? 'http://localhost:3001/api'
             : `${window.location.protocol}//${window.location.host}/api`;
         
+        console.log('🔧 API_BASE_URL configured as:', API_BASE_URL);
+        console.log('🔧 Current hostname:', window.location.hostname);
+        
         // API Helper Functions
         const api = {
             // Auth
             login: async (email, password) => {
                 console.log('🔐 Attempting login with:', { email, password: '***' });
-                const response = await fetch(`${API_BASE_URL}/auth/login`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
-                });
+                const loginUrl = `${API_BASE_URL}/auth/login`;
+                console.log('🔗 Login URL:', loginUrl);
                 
-                console.log('📡 Login response status:', response.status);
-                const data = await response.json();
-                console.log('📡 Login response data:', data);
-                
-                if (!response.ok) {
-                    throw new Error(data.error || 'Login failed');
+                try {
+                    const response = await fetch(loginUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, password })
+                    });
+                    
+                    console.log('📡 Login response status:', response.status);
+                    console.log('📡 Login response URL:', response.url);
+                    
+                    const contentType = response.headers.get('content-type');
+                    console.log('📡 Content-Type:', contentType);
+                    
+                    if (contentType && contentType.includes('application/json')) {
+                        const data = await response.json();
+                        console.log('📡 Login response data:', data);
+                        
+                        if (!response.ok) {
+                            throw new Error(data.error || 'Login failed');
+                        }
+                        
+                        return data;
+                    } else {
+                        const text = await response.text();
+                        console.log('📡 Login response (text):', text.substring(0, 200));
+                        throw new Error('Server returned non-JSON response');
+                    }
+                    
+                } catch (error) {
+                    console.error('🚨 Fetch error:', error);
+                    throw error;
                 }
-                
-                return data;
             },
             
             register: async (username, email, password) => {
@@ -304,6 +327,11 @@
           const [voiceSupported, setVoiceSupported] = useState(false);
           const [speechRecognition, setSpeechRecognition] = useState(null);
 
+          // Search-related states
+          const [searchQuery, setSearchQuery] = useState('');
+          const [searchResults, setSearchResults] = useState([]);
+          const [searchLoading, setSearchLoading] = useState(false);
+
           // Data states
           const [harvestData, setHarvestData] = useState([]);
           const [harvestSortOrder, setHarvestSortOrder] = useState('desc'); // 'desc' = latest first
@@ -364,16 +392,29 @@
               recognition.onresult = (event) => {
                 const transcript = event.results[0][0].transcript;
                 console.log('🗣️ Voice input:', transcript);
-                setGeminiInput(transcript);
                 setIsListening(false);
                 
-                // Auto-send after voice input (for hands-free operation)
-                setTimeout(() => {
-                  if (transcript.trim()) {
-                    const fakeEvent = { preventDefault: () => {} };
-                    handleGeminiSend(fakeEvent);
-                  }
-                }, 1000);
+                // Set input based on active tab
+                if (activeTab === 'search') {
+                  setSearchQuery(transcript);
+                  // Auto-search after voice input
+                  setTimeout(() => {
+                    if (transcript.trim()) {
+                      // Simulate search query
+                      setSearchQuery(transcript);
+                      setTimeout(() => handleSearchQuery(), 500);
+                    }
+                  }, 1000);
+                } else {
+                  setGeminiInput(transcript);
+                  // Auto-send after voice input (for hands-free operation)
+                  setTimeout(() => {
+                    if (transcript.trim()) {
+                      const fakeEvent = { preventDefault: () => {} };
+                      handleGeminiSend(fakeEvent);
+                    }
+                  }, 1000);
+                }
               };
               
               recognition.onerror = (event) => {
@@ -431,7 +472,10 @@
               const status = await response.json();
               console.log('🔍 API Status:', status);
               
-              if (!status.gemini.configured) {
+              if (status.search?.mode === 'offline') {
+                console.log('✅ Using Offline Search Engine');
+                setGeminiStatus('ready');
+              } else if (!status.gemini?.configured) {
                 console.warn('⚠️ Gemini API key is not configured on server');
                 setGeminiStatus('unavailable');
               } else {
@@ -440,6 +484,62 @@
             } catch (error) {
               console.error('❌ Failed to check API status:', error);
               setGeminiStatus('unavailable');
+            }
+          };
+
+          // Search Functions
+          const handleSearchQuery = async () => {
+            if (!searchQuery.trim()) return;
+            
+            setSearchLoading(true);
+            try {
+              const token = localStorage.getItem('token');
+              const response = await fetch(`${API_BASE_URL}/chat`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                  message: searchQuery.trim(),
+                  context: {
+                    currentDate: new Date().toLocaleDateString('th-TH'),
+                    currentDateISO: new Date().toISOString().split('T')[0],
+                    currentYear: new Date().getFullYear(),
+                    buddhistYear: new Date().getFullYear() + 543,
+                    currentMonth: new Date().getMonth() + 1,
+                    userName: currentUser?.email || 'ผู้ใช้'
+                  }
+                })
+              });
+
+              const data = await response.json();
+              
+              if (response.ok) {
+                const newResult = {
+                  query: searchQuery,
+                  answer: data.message,
+                  timestamp: new Date().toISOString()
+                };
+                
+                setSearchResults(prev => [newResult, ...prev]);
+                setSearchQuery('');
+              } else {
+                alert('เกิดข้อผิดพลาดในการค้นหา: ' + (data.message || data.error));
+              }
+            } catch (error) {
+              console.error('Search error:', error);
+              alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+            } finally {
+              setSearchLoading(false);
+            }
+          };
+
+          const toggleVoiceInput = () => {
+            if (isListening) {
+              stopVoiceRecording();
+            } else {
+              startVoiceRecording();
             }
           };
           
@@ -1219,6 +1319,7 @@
                       {key: 'fertilizer', label: 'ปุ๋ย'}, 
                       {key: 'palmtrees', label: 'ต้นปาล์ม'}, 
                       {key: 'notes', label: 'บันทึก'}, 
+                      {key: 'search', label: 'ค้นหาข้อมูล'}, 
                       {key: 'reports', label: 'รายงาน'},
                       ...(currentUser?.role === 'admin' ? [{key: 'users', label: 'จัดการสมาชิก'}] : [])
                     ].map((tab) => (
@@ -2675,6 +2776,136 @@
                   </div>
                 )}
 
+                {/* Search Tab */}
+                {activeTab === 'search' && (
+                  <div className="space-y-8">
+                    <h2 className="text-3xl font-bold text-gray-800">🔍 ค้นหาข้อมูลด้วย AI Assistant</h2>
+                    
+                    {/* Search Form */}
+                    <div className="bg-white p-8 rounded-xl shadow-lg">
+                      <h3 className="text-xl font-semibold text-gray-800 mb-6">💬 ถามคำถามเกี่ยวกับข้อมูลสวนปาล์ม</h3>
+                      
+                      <div className="space-y-4">
+                        <div className="relative">
+                          <textarea
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="ถามคำถามเกี่ยวกับข้อมูลของคุณ... เช่น 'รายได้เดือนนี้เท่าไหร่?' หรือ 'ต้นไหนให้ผลเยอะที่สุด?'"
+                            className="w-full p-4 pr-16 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                            rows="3"
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                handleSearchQuery();
+                              }
+                            }}
+                          />
+                          <button
+                            onClick={handleSearchQuery}
+                            disabled={!searchQuery.trim() || searchLoading}
+                            className="absolute right-2 top-2 bg-green-500 text-white p-3 rounded-lg hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                          >
+                            {searchLoading ? (
+                              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                            ) : (
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                              </svg>
+                            )}
+                          </button>
+                        </div>
+                        
+                        {/* Voice Input Button */}
+                        <div className="flex justify-between items-center">
+                          <button
+                            onClick={toggleVoiceInput}
+                            className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+                              isListening 
+                                ? 'bg-red-500 text-white hover:bg-red-600' 
+                                : 'bg-blue-500 text-white hover:bg-blue-600'
+                            }`}
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                                d={isListening ? "M21 12a9 9 0 11-18 0 9 9 0 0118 0z" : "M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"} 
+                              />
+                            </svg>
+                            <span>{isListening ? 'หยุดบันทึกเสียง' : 'พูดคำถาม'}</span>
+                          </button>
+                          
+                          <button
+                            onClick={() => setSearchQuery('')}
+                            className="px-4 py-2 text-gray-500 hover:text-gray-700 transition-colors"
+                          >
+                            ล้างข้อความ
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Search Results */}
+                    {searchResults.length > 0 && (
+                      <div className="bg-white p-8 rounded-xl shadow-lg">
+                        <h3 className="text-xl font-semibold text-gray-800 mb-6">💡 ผลลัพธ์การค้นหา</h3>
+                        <div className="space-y-4">
+                          {searchResults.map((result, index) => (
+                            <div key={index} className="border-l-4 border-green-500 pl-4 py-3 bg-green-50 rounded-r-lg">
+                              <div className="flex justify-between items-start mb-2">
+                                <p className="text-sm text-gray-600">
+                                  <strong>คำถาม:</strong> {result.query}
+                                </p>
+                                <span className="text-xs text-gray-400">
+                                  {new Date(result.timestamp).toLocaleString('th-TH')}
+                                </span>
+                              </div>
+                              <p className="text-gray-800 leading-relaxed">
+                                <strong>คำตอบ:</strong> {result.answer}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                        
+                        <div className="flex justify-end mt-6">
+                          <button
+                            onClick={() => setSearchResults([])}
+                            className="px-4 py-2 text-red-600 hover:text-red-800 transition-colors"
+                          >
+                            ล้างผลลัพธ์
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Quick Search Examples */}
+                    <div className="bg-white p-8 rounded-xl shadow-lg">
+                      <h3 className="text-xl font-semibold text-gray-800 mb-6">✨ ตัวอย่างคำถามที่ถามได้</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {[
+                          "รายได้เดือนนี้เท่าไหร่?",
+                          "รายได้เดือนที่แล้วเท่าไหร่?",
+                          "เก็บเกี่ยวครั้งต่อไปเมื่อไหร่?",
+                          "กำไรสุทธิทั้งหมด",
+                          "วันนี้วันที่เท่าไหร่?",
+                          "ใส่ปุ๋ยครั้งล่าสุดเมื่อไหร่?",
+                          "น้ำหนักรวมเดือนที่แล้วเท่าไหร่",
+                          "น้ำหนักรวมเดือนนี้เท่าไหร่",
+                          "ราคาเฉลี่ยต่อกิโลกรัมเดือนที่แล้วเท่าไหร่",
+                          "ราคาเฉลี่ยต่อกิโลกรัมเดือนนี้เท่าไหร่"
+                        ].map((example, index) => (
+                          <button
+                            key={index}
+                            onClick={() => setSearchQuery(example)}
+                            className="text-left p-3 border border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition-colors"
+                          >
+                            <span className="text-sm text-gray-600">💬 </span>
+                            <span className="text-gray-800">{example}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Reports Tab */}
                 {activeTab === 'reports' && (
                   <div className="space-y-8">
@@ -2836,7 +3067,7 @@
                 )}
 
                 {/* Other tabs show simple message */}
-                {!['dashboard', 'harvest', 'fertilizer', 'palmtrees', 'notes', 'users', 'reports'].includes(activeTab) && (
+                {!['dashboard', 'harvest', 'fertilizer', 'palmtrees', 'notes', 'search', 'users', 'reports'].includes(activeTab) && (
                   <div className="bg-white p-8 rounded-xl shadow-md text-center">
                     <h2 className="text-2xl font-bold text-gray-800 mb-4">หน้า {activeTab} กำลังพัฒนา</h2>
                     <p className="text-gray-600">ฟีเจอร์นี้จะเปิดให้ใช้งานเร็วๆ นี้</p>
@@ -2844,7 +3075,7 @@
                 )}
               </main>
 
-              {/* Gemini AI Chat Button */}
+              {/* AI Assistant Chat Button */}
               {currentUser && (
                 <button
                   onClick={() => setShowGeminiChat(!showGeminiChat)}
@@ -2854,7 +3085,7 @@
                     'bg-yellow-500 hover:bg-yellow-600'
                   }`}
                   title={
-                    geminiStatus === 'ready' ? 'ปรึกษา Gemini AI' :
+                    geminiStatus === 'ready' ? 'ปรึกษา AI Assistant (Offline)' :
                     geminiStatus === 'unavailable' ? 'AI ไม่พร้อมใช้งาน' :
                     'กำลังตรวจสอบ AI...'
                   }
@@ -2872,7 +3103,7 @@
                     {/* Chat Header */}
                     <div className="bg-green-600 text-white p-3 sm:p-4 rounded-t-lg flex justify-between items-center">
                       <div>
-                        <h3 className="text-base sm:text-lg font-semibold">ปรึกษา Gemini AI</h3>
+                        <h3 className="text-base sm:text-lg font-semibold">ปรึกษา AI Assistant (Offline)</h3>
                         <div className="text-xs sm:text-sm opacity-90 flex items-center space-x-2">
                           <span>
                             {geminiStatus === 'ready' && '🟢 พร้อมใช้งาน'}
@@ -2907,28 +3138,40 @@
                             <p className="font-medium text-gray-700 mb-2">💡 ตัวอย่างคำถาม:</p>
                             <div className="space-y-1 text-sm text-gray-600">
                               <button 
-                                onClick={() => setGeminiInput('วันนี้วันที่เท่าไหร่')}
+                                onClick={() => setGeminiInput('รายได้เดือนนี้เท่าไหร่?')}
                                 className="block w-full text-left hover:text-green-600 hover:bg-white p-1 rounded"
                               >
-                                📅 วันนี้วันที่เท่าไหร่
+                                💰 รายได้เดือนนี้เท่าไหร่?
                               </button>
                               <button 
-                                onClick={() => setGeminiInput('รายได้เดือนนี้เท่าไหร่')}
+                                onClick={() => setGeminiInput('รายได้เดือนที่แล้วเท่าไหร่?')}
                                 className="block w-full text-left hover:text-green-600 hover:bg-white p-1 rounded"
                               >
-                                💰 รายได้เดือนนี้เท่าไหร่
+                                💸 รายได้เดือนที่แล้วเท่าไหร่?
                               </button>
                               <button 
-                                onClick={() => setGeminiInput('ใส่ปุ๋ยครั้งล่าสุดเมื่อไหร่')}
+                                onClick={() => setGeminiInput('น้ำหนักรวมเดือนนี้เท่าไหร่')}
                                 className="block w-full text-left hover:text-green-600 hover:bg-white p-1 rounded"
                               >
-                                🌱 ใส่ปุ๋ยครั้งล่าสุดเมื่อไหร่
+                                ⚖️ น้ำหนักรวมเดือนนี้เท่าไหร่
                               </button>
                               <button 
-                                onClick={() => setGeminiInput('ต้นไหนให้ผลผลิตเยอะที่สุด')}
+                                onClick={() => setGeminiInput('น้ำหนักรวมเดือนที่แล้วเท่าไหร่')}
                                 className="block w-full text-left hover:text-green-600 hover:bg-white p-1 rounded"
                               >
-                                🌴 ต้นไหนให้ผลผลิตเยอะที่สุด
+                                📊 น้ำหนักรวมเดือนที่แล้วเท่าไหร่
+                              </button>
+                              <button 
+                                onClick={() => setGeminiInput('ราคาเฉลี่ยต่อกิโลกรัมเดือนนี้เท่าไหร่')}
+                                className="block w-full text-left hover:text-green-600 hover:bg-white p-1 rounded"
+                              >
+                                💲 ราคาเฉลี่ยต่อกิโลกรัมเดือนนี้เท่าไหร่
+                              </button>
+                              <button 
+                                onClick={() => setGeminiInput('ราคาเฉลี่ยต่อกิโลกรัมเดือนที่แล้วเท่าไหร่')}
+                                className="block w-full text-left hover:text-green-600 hover:bg-white p-1 rounded"
+                              >
+                                📈 ราคาเฉลี่ยต่อกิโลกรัมเดือนที่แล้วเท่าไหร่
                               </button>
                             </div>
                           </div>

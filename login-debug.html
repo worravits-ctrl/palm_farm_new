@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Debug Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background: #d4edda; border-color: #c3e6cb; }
+        .error { background: #f8d7da; border-color: #f5c6cb; }
+        .info { background: #d1ecf1; border-color: #bee5eb; }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; cursor: pointer; border-radius: 4px; }
+        button:hover { background: #0056b3; }
+        input { padding: 8px; margin: 5px; width: 250px; border: 1px solid #ddd; border-radius: 4px; }
+        pre { background: #f8f9fa; padding: 10px; overflow-x: auto; border-radius: 4px; font-size: 12px; }
+        .log { margin: 5px 0; padding: 5px; background: #f8f9fa; border-left: 3px solid #007bff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Login Debug Test</h1>
+        <p>หน้านี้ใช้เพื่อ debug ปัญหา login โดยเฉพาะ</p>
+
+        <!-- 1. API Configuration Test -->
+        <div class="test-section info">
+            <h3>1️⃣ API Configuration</h3>
+            <button onclick="testAPIConfig()">Test API Config</button>
+            <div id="configResult"></div>
+        </div>
+
+        <!-- 2. API Status Test -->
+        <div class="test-section info">
+            <h3>2️⃣ API Server Status</h3>
+            <button onclick="testAPIStatus()">Test API Status</button>
+            <div id="statusResult"></div>
+        </div>
+
+        <!-- 3. Manual Login Test -->
+        <div class="test-section info">
+            <h3>3️⃣ Manual Login Test</h3>
+            <div>
+                <input type="email" id="testEmail" value="admin@palmoil.com" placeholder="Email">
+                <input type="password" id="testPassword" value="admin" placeholder="Password">
+                <button onclick="testManualLogin()">Test Login</button>
+            </div>
+            <div id="loginResult"></div>
+        </div>
+
+        <!-- 4. Raw Fetch Test -->
+        <div class="test-section info">
+            <h3>4️⃣ Raw Fetch Test</h3>
+            <button onclick="testRawFetch()">Test Raw Fetch</button>
+            <div id="fetchResult"></div>
+        </div>
+
+        <!-- 5. Console Logs -->
+        <div class="test-section info">
+            <h3>5️⃣ Console Logs</h3>
+            <button onclick="clearLogs()">Clear Logs</button>
+            <div id="consoleLog"></div>
+        </div>
+    </div>
+
+    <script>
+        // Log function
+        function addLog(message, type = 'info') {
+            const logDiv = document.getElementById('consoleLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log';
+            logEntry.innerHTML = `[${timestamp}] ${message}`;
+            logDiv.appendChild(logEntry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(`[${timestamp}] ${message}`);
+        }
+
+        function clearLogs() {
+            document.getElementById('consoleLog').innerHTML = '';
+        }
+
+        // 1. Test API Configuration
+        function testAPIConfig() {
+            const resultDiv = document.getElementById('configResult');
+            addLog('🔧 Testing API Configuration...');
+            
+            try {
+                const hostname = window.location.hostname;
+                const protocol = window.location.protocol;
+                const host = window.location.host;
+                
+                const API_BASE_URL = hostname === 'localhost' 
+                    ? 'http://localhost:3001/api'
+                    : `${protocol}//${host}/api`;
+                
+                resultDiv.className = 'test-section success';
+                resultDiv.innerHTML = `
+                    <h4>✅ API Configuration OK</h4>
+                    <p><strong>Current hostname:</strong> ${hostname}</p>
+                    <p><strong>Current protocol:</strong> ${protocol}</p>
+                    <p><strong>Current host:</strong> ${host}</p>
+                    <p><strong>API_BASE_URL:</strong> ${API_BASE_URL}</p>
+                    <p><strong>Expected Login URL:</strong> ${API_BASE_URL}/auth/login</p>
+                `;
+                addLog(`API_BASE_URL: ${API_BASE_URL}`);
+                
+                // Store for other tests
+                window.TEST_API_BASE_URL = API_BASE_URL;
+                
+            } catch (error) {
+                resultDiv.className = 'test-section error';
+                resultDiv.innerHTML = `<h4>❌ API Config Error</h4><p>${error.message}</p>`;
+                addLog(`❌ API Config Error: ${error.message}`);
+            }
+        }
+
+        // 2. Test API Status
+        async function testAPIStatus() {
+            const resultDiv = document.getElementById('statusResult');
+            addLog('🔍 Testing API Status...');
+            
+            if (!window.TEST_API_BASE_URL) {
+                testAPIConfig();
+            }
+            
+            const statusUrl = `${window.TEST_API_BASE_URL}/status`;
+            addLog(`Testing: ${statusUrl}`);
+            
+            try {
+                const response = await fetch(statusUrl);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.className = 'test-section success';
+                    resultDiv.innerHTML = `
+                        <h4>✅ API Status OK</h4>
+                        <p><strong>Status Code:</strong> ${response.status}</p>
+                        <p><strong>Server:</strong> ${data.server}</p>
+                        <p><strong>Version:</strong> ${data.version}</p>
+                        <p><strong>Search Mode:</strong> ${data.search?.mode}</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                    addLog(`✅ API Status: ${response.status} OK`);
+                } else {
+                    resultDiv.className = 'test-section error';
+                    resultDiv.innerHTML = `<h4>❌ API Status Error</h4><p>Status: ${response.status}</p>`;
+                    addLog(`❌ API Status Error: ${response.status}`);
+                }
+            } catch (error) {
+                resultDiv.className = 'test-section error';
+                resultDiv.innerHTML = `<h4>❌ API Connection Error</h4><p>${error.message}</p>`;
+                addLog(`❌ API Connection Error: ${error.message}`);
+            }
+        }
+
+        // 3. Test Manual Login
+        async function testManualLogin() {
+            const resultDiv = document.getElementById('loginResult');
+            const email = document.getElementById('testEmail').value;
+            const password = document.getElementById('testPassword').value;
+            
+            addLog('🔐 Testing Manual Login...');
+            
+            if (!window.TEST_API_BASE_URL) {
+                testAPIConfig();
+            }
+            
+            const loginUrl = `${window.TEST_API_BASE_URL}/auth/login`;
+            addLog(`Login URL: ${loginUrl}`);
+            addLog(`Email: ${email}`);
+            
+            try {
+                const requestBody = JSON.stringify({ email, password });
+                addLog(`Request Body: ${requestBody}`);
+                
+                const response = await fetch(loginUrl, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: requestBody
+                });
+                
+                addLog(`Response Status: ${response.status}`);
+                addLog(`Response URL: ${response.url}`);
+                addLog(`Response Headers: ${JSON.stringify([...response.headers])}`);
+                
+                const contentType = response.headers.get('content-type');
+                addLog(`Content-Type: ${contentType}`);
+                
+                if (contentType && contentType.includes('application/json')) {
+                    const data = await response.json();
+                    addLog(`Response Data: ${JSON.stringify(data, null, 2)}`);
+                    
+                    if (response.ok) {
+                        resultDiv.className = 'test-section success';
+                        resultDiv.innerHTML = `
+                            <h4>✅ Login Success!</h4>
+                            <p><strong>Status:</strong> ${response.status}</p>
+                            <p><strong>User:</strong> ${data.user?.email} (${data.user?.role})</p>
+                            <p><strong>Token Length:</strong> ${data.token?.length}</p>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        `;
+                        addLog('✅ Login Success!');
+                    } else {
+                        resultDiv.className = 'test-section error';
+                        resultDiv.innerHTML = `
+                            <h4>❌ Login Failed</h4>
+                            <p><strong>Status:</strong> ${response.status}</p>
+                            <p><strong>Error:</strong> ${data.error || data.message}</p>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        `;
+                        addLog(`❌ Login Failed: ${data.error || data.message}`);
+                    }
+                } else {
+                    const text = await response.text();
+                    addLog(`Non-JSON Response: ${text.substring(0, 200)}`);
+                    
+                    resultDiv.className = 'test-section error';
+                    resultDiv.innerHTML = `
+                        <h4>❌ Non-JSON Response</h4>
+                        <p><strong>Status:</strong> ${response.status}</p>
+                        <p><strong>Content-Type:</strong> ${contentType}</p>
+                        <pre>${text.substring(0, 500)}</pre>
+                    `;
+                }
+                
+            } catch (error) {
+                resultDiv.className = 'test-section error';
+                resultDiv.innerHTML = `<h4>❌ Login Error</h4><p>${error.message}</p>`;
+                addLog(`❌ Login Error: ${error.message}`);
+            }
+        }
+
+        // 4. Test Raw Fetch
+        async function testRawFetch() {
+            const resultDiv = document.getElementById('fetchResult');
+            addLog('🧪 Testing Raw Fetch...');
+            
+            try {
+                // Test different variations of the URL
+                const urls = [
+                    'http://localhost:3001/api/auth/login',
+                    'http://127.0.0.1:3001/api/auth/login',
+                    '/api/auth/login'
+                ];
+                
+                for (const url of urls) {
+                    addLog(`Testing URL: ${url}`);
+                    
+                    try {
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email: 'admin@palmoil.com', password: 'admin' })
+                        });
+                        
+                        addLog(`${url} -> Status: ${response.status}`);
+                        
+                        if (response.status === 200) {
+                            const data = await response.json();
+                            addLog(`✅ SUCCESS with ${url}`);
+                            
+                            resultDiv.className = 'test-section success';
+                            resultDiv.innerHTML = `
+                                <h4>✅ Raw Fetch Success!</h4>
+                                <p><strong>Working URL:</strong> ${url}</p>
+                                <p><strong>Status:</strong> ${response.status}</p>
+                                <pre>${JSON.stringify(data, null, 2)}</pre>
+                            `;
+                            return;
+                        }
+                        
+                    } catch (error) {
+                        addLog(`${url} -> Error: ${error.message}`);
+                    }
+                }
+                
+                resultDiv.className = 'test-section error';
+                resultDiv.innerHTML = `<h4>❌ All URLs Failed</h4><p>Check console logs for details</p>`;
+                
+            } catch (error) {
+                resultDiv.className = 'test-section error';
+                resultDiv.innerHTML = `<h4>❌ Raw Fetch Error</h4><p>${error.message}</p>`;
+                addLog(`❌ Raw Fetch Error: ${error.message}`);
+            }
+        }
+
+        // Auto-run configuration test on load
+        window.onload = function() {
+            addLog('🚀 Login Debug Test Started');
+            testAPIConfig();
+            setTimeout(testAPIStatus, 1000);
+        };
+    </script>
+</body>
+</html>
