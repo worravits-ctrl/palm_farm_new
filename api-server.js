@@ -436,12 +436,13 @@ app.delete('/api/users/:id', authenticateToken, requireAdmin, (req, res) => {
 
 // Get harvest data - All users see the same shared data
 app.get('/api/harvest', authenticateToken, (req, res) => {
-    db.all('SELECT * FROM harvest_data ORDER BY date DESC', [], (err, rows) => {
+    const userId = req.user.userId;
+    db.all('SELECT * FROM harvest_data WHERE user_id = ? ORDER BY date DESC', [userId], (err, rows) => {
         if (err) {
             console.error('Database error in harvest:', err);
             return res.status(500).json({ error: 'Database error' });
         }
-        console.log('Returning', rows.length, 'harvest records for user:', req.user.email);
+        console.log('Returning', rows.length, 'harvest records for user:', req.user.email, '(ID:', userId + ')');
         res.json(rows);
     });
 });
@@ -836,12 +837,13 @@ app.post('/api/notes/bulk', authenticateToken, (req, res) => {
 
 // Get fertilizer data - All users see the same shared data
 app.get('/api/fertilizer', authenticateToken, (req, res) => {
-    db.all('SELECT * FROM fertilizer_data ORDER BY date DESC', [], (err, rows) => {
+    const userId = req.user.userId;
+    db.all('SELECT * FROM fertilizer_data WHERE user_id = ? ORDER BY date DESC', [userId], (err, rows) => {
         if (err) {
             console.error('Database error in fertilizer:', err);
             return res.status(500).json({ error: 'Database error' });
         }
-        console.log('Returning', rows.length, 'fertilizer records for user:', req.user.email);
+        console.log('Returning', rows.length, 'fertilizer records for user:', req.user.email, '(ID:', userId + ')');
         res.json(rows);
     });
 });
@@ -957,15 +959,16 @@ app.delete('/api/fertilizer/:id', authenticateToken, (req, res) => {
 
 // Get palm tree data - All users see the same shared data
 app.get('/api/palmtrees', authenticateToken, (req, res) => {
-    db.all('SELECT * FROM palm_tree_data ORDER BY harvest_date DESC', [], (err, rows) => {
+    const userId = req.user.userId;
+    db.all('SELECT * FROM palm_tree_data WHERE user_id = ? ORDER BY harvest_date DESC', [userId], (err, rows) => {
         if (err) {
             console.error('Database error in palmtrees:', err);
             return res.status(500).json({ error: 'Database error' });
         }
-        console.log('📊 Total rows from database:', rows.length);
+        console.log('📊 Total rows for user', userId + ':', rows.length);
         console.log('🔍 First 3 rows:', rows.slice(0, 3));
         console.log('🔍 Last 3 rows:', rows.slice(-3));
-        console.log('Returning', rows.length, 'palmtree records for user:', req.user.email);
+        console.log('Returning', rows.length, 'palmtree records for user:', req.user.email, '(ID:', userId + ')');
         res.json(rows);
     });
 });
@@ -1093,11 +1096,12 @@ app.delete('/api/palmtrees/:id', authenticateToken, (req, res) => {
 
 // Get notes
 app.get('/api/notes', authenticateToken, (req, res) => {
-    // Return all notes for shared data model (no user filtering)
-    const query = 'SELECT * FROM notes_data ORDER BY date DESC';
-    const params = [];
+    // Return notes filtered by user_id
+    const userId = req.user.userId;
+    const query = 'SELECT * FROM notes_data WHERE user_id = ? ORDER BY date DESC';
+    const params = [userId];
 
-    console.log('GET /api/notes - User:', req.user.email, 'Role:', req.user.role, 'Query:', query, 'Params:', params);
+    console.log('GET /api/notes - User:', req.user.email, 'Role:', req.user.role, 'ID:', userId, 'Query:', query, 'Params:', params);
 
     db.all(query, params, (err, rows) => {
         if (err) {
@@ -1268,14 +1272,16 @@ app.get('/api/notes/categories', authenticateToken, (req, res) => {
 // ==== DASHBOARD STATS ====
 
 app.get('/api/stats', authenticateToken, (req, res) => {
-    // Return shared stats for all users (no user filtering)
+    // Return stats filtered by user_id
     console.log('GET /api/stats - User:', req.user.email, 'Role:', req.user.role, 'UserId:', req.user.userId);
     
+    const userId = req.user.userId;
+    
     const promises = [
-        // Harvest stats - shared data
+        // Harvest stats - filtered by user_id
         new Promise((resolve, reject) => {
-            const query = 'SELECT COUNT(*) as count, SUM(total_revenue) as revenue, SUM(net_profit) as profit FROM harvest_data';
-            const params = [];
+            const query = 'SELECT COUNT(*) as count, SUM(total_revenue) as revenue, SUM(net_profit) as profit FROM harvest_data WHERE user_id = ?';
+            const params = [userId];
             
             console.log('Stats harvest query:', query, 'params:', params);
             
@@ -1290,10 +1296,10 @@ app.get('/api/stats', authenticateToken, (req, res) => {
             });
         }),
         
-        // Fertilizer stats - shared data
+        // Fertilizer stats - filtered by user_id
         new Promise((resolve, reject) => {
-            const query = 'SELECT COUNT(*) as count, SUM(total_cost) as cost FROM fertilizer_data';
-            const params = [];
+            const query = 'SELECT COUNT(*) as count, SUM(total_cost) as cost FROM fertilizer_data WHERE user_id = ?';
+            const params = [userId];
             
             console.log('Stats fertilizer query:', query, 'params:', params);
             
@@ -1308,10 +1314,10 @@ app.get('/api/stats', authenticateToken, (req, res) => {
             });
         }),
         
-        // Palm tree stats - shared data
+        // Palm tree stats - filtered by user_id
         new Promise((resolve, reject) => {
-            const query = 'SELECT COUNT(DISTINCT tree_id) as count FROM palm_tree_data';
-            const params = [];
+            const query = 'SELECT COUNT(DISTINCT tree_id) as count FROM palm_tree_data WHERE user_id = ?';
+            const params = [userId];
             
             console.log('Stats palmtree query:', query, 'params:', params);
             
