@@ -1089,6 +1089,94 @@ app.delete('/api/palmtrees/:id', authenticateToken, (req, res) => {
     });
 });
 
+// Get unique palm trees for icon display (all 312 trees A1-L26)
+app.get('/api/palmtrees/list', authenticateToken, (req, res) => {
+    // Generate all possible tree IDs from A1-L26
+    const treeIds = [];
+    const rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
+    
+    rows.forEach(row => {
+        for (let i = 1; i <= 26; i++) {
+            treeIds.push(`${row}${i}`);
+        }
+    });
+
+    console.log('Generated tree IDs:', treeIds.length, 'trees');
+    
+    // Get harvest counts and latest harvest date for each tree
+    const query = `
+        SELECT 
+            tree_id,
+            COUNT(*) as harvest_count,
+            MAX(harvest_date) as latest_harvest,
+            SUM(bunch_count) as total_bunches
+        FROM palm_tree_data 
+        GROUP BY tree_id
+    `;
+    
+    db.all(query, (err, harvestData) => {
+        if (err) {
+            console.error('Database error in palmtrees/list:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+
+        // Create map for quick lookup
+        const harvestMap = {};
+        harvestData.forEach(row => {
+            harvestMap[row.tree_id] = row;
+        });
+
+        // Generate complete tree list with harvest statistics
+        const completeTreeList = treeIds.map(treeId => {
+            const harvestInfo = harvestMap[treeId] || {
+                harvest_count: 0,
+                latest_harvest: null,
+                total_bunches: 0
+            };
+            
+            return {
+                tree_id: treeId,
+                harvest_count: harvestInfo.harvest_count,
+                latest_harvest: harvestInfo.latest_harvest,
+                total_bunches: harvestInfo.total_bunches,
+                status: harvestInfo.harvest_count > 0 ? 'active' : 'inactive'
+            };
+        });
+
+        console.log('Returning', completeTreeList.length, 'complete tree list with harvest statistics');
+        res.json(completeTreeList);
+    });
+});
+
+// Get harvest history for specific tree
+app.get('/api/palmtrees/:treeId/history', authenticateToken, (req, res) => {
+    const treeId = req.params.treeId;
+    
+    const query = `
+        SELECT 
+            harvest_date,
+            bunch_count,
+            notes,
+            created_at
+        FROM palm_tree_data 
+        WHERE tree_id = ?
+        ORDER BY harvest_date DESC
+    `;
+    
+    db.all(query, [treeId], (err, rows) => {
+        if (err) {
+            console.error('Database error in palmtree history:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        
+        console.log(`Returning ${rows.length} harvest records for tree ${treeId}`);
+        res.json({
+            tree_id: treeId,
+            harvest_history: rows
+        });
+    });
+});
+
 // ==== NOTES ROUTES ====
 
 // Get notes
