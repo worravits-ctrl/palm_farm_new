@@ -7,14 +7,14 @@ class OfflineSearchEngine {
         this.db = new sqlite3.Database(dbPath);
     }
 
-    // ค้นหาข้อมูลการเก็บเกี่ยว
+    // ค้นหาข้อมูลการเก็บเกี่ยว (แบบ shared data)
     async searchHarvest(userId, filters = {}) {
         return new Promise((resolve, reject) => {
             let query = `
                 SELECT * FROM harvest_data 
-                WHERE user_id = ?
+                WHERE 1=1
             `;
-            let params = [userId];
+            let params = [];
 
             // เพิ่มเงื่อนไขการค้นหา
             if (filters.dateFrom) {
@@ -56,9 +56,9 @@ class OfflineSearchEngine {
         return new Promise((resolve, reject) => {
             let query = `
                 SELECT * FROM fertilizer_data 
-                WHERE user_id = ?
+                WHERE 1=1
             `;
-            let params = [userId];
+            let params = [];
 
             if (filters.dateFrom) {
                 query += ` AND date >= ?`;
@@ -91,9 +91,9 @@ class OfflineSearchEngine {
         return new Promise((resolve, reject) => {
             let query = `
                 SELECT * FROM palm_tree_data 
-                WHERE user_id = ?
+                WHERE 1=1
             `;
-            let params = [userId];
+            let params = [];
 
             if (filters.treeId) {
                 query += ` AND tree_id LIKE ?`;
@@ -126,9 +126,9 @@ class OfflineSearchEngine {
         return new Promise((resolve, reject) => {
             let query = `
                 SELECT * FROM notes_data 
-                WHERE user_id = ?
+                WHERE 1=1
             `;
-            let params = [userId];
+            let params = [];
 
             if (filters.keyword) {
                 query += ` AND (title LIKE ? OR content LIKE ?)`;
@@ -166,10 +166,10 @@ class OfflineSearchEngine {
                     SUM(fallen_weight) as total_fallen_weight,
                     SUM(fallen_weight * fallen_price_per_kg) as fallen_revenue
                 FROM harvest_data 
-                WHERE user_id = ? AND date BETWEEN ? AND ?
+                WHERE date BETWEEN ? AND ?
             `;
 
-            this.db.get(query, [userId, dateFrom, dateTo], (err, row) => {
+            this.db.get(query, [dateFrom, dateTo], (err, row) => {
                 if (err) reject(err);
                 else resolve(row);
             });
@@ -187,13 +187,13 @@ class OfflineSearchEngine {
                     AVG(bunch_count) as avg_bunches,
                     MAX(harvest_date) as last_harvest
                 FROM palm_tree_data 
-                WHERE user_id = ? AND bunch_count > 0
+                WHERE bunch_count > 0
                 GROUP BY tree_id
                 ORDER BY total_bunches DESC
                 LIMIT ?
             `;
 
-            this.db.all(query, [userId, limit], (err, rows) => {
+            this.db.all(query, [limit], (err, rows) => {
                 if (err) reject(err);
                 else resolve(rows);
             });
@@ -206,12 +206,11 @@ class OfflineSearchEngine {
             const query = `
                 SELECT date as last_harvest_date 
                 FROM harvest_data 
-                WHERE user_id = ? 
                 ORDER BY date DESC 
                 LIMIT 1
             `;
 
-            this.db.get(query, [userId], (err, row) => {
+            this.db.get(query, (err, row) => {
                 if (err) {
                     reject(err);
                     return;

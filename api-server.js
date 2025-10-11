@@ -1914,6 +1914,39 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
     }
 });
 
+// Search endpoint (alias for chat functionality)
+app.post('/api/search', authenticateToken, async (req, res) => {
+    try {
+        const { question } = req.body;
+        const user_id = req.user.userId;
+
+        if (!question || question.trim() === '') {
+            return res.status(400).json({ error: 'Question is required' });
+        }
+
+        console.log(`🔍 Search request from ${req.user.email} (User ID: ${user_id}): "${question}"`);
+
+        // ใช้ OfflineSearchEngine เหมือน chat endpoint
+        const OfflineSearchEngine = require('./OfflineSearchEngine');
+        const searchEngine = new OfflineSearchEngine(dbPath);
+        const answer = await searchEngine.answerQuestion(question, user_id);
+
+        console.log(`✅ Search answer: "${answer}"`);
+
+        res.json({
+            answer: answer,
+            timestamp: new Date().toISOString(),
+        });
+
+    } catch (error) {
+        console.error('❌ Search error:', error);
+        res.status(500).json({
+            error: 'Search service error',
+            message: 'เกิดข้อผิดพลาดในการค้นหาข้อมูล'
+        });
+    }
+});
+
 // Database Viewer Endpoint (สำหรับดูข้อมูลใน Production)
 app.get('/api/admin/db-viewer', authenticateToken, (req, res) => {
     // ตรวจสอบว่าเป็น admin เท่านั้น
