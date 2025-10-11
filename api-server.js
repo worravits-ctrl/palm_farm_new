@@ -436,13 +436,12 @@ app.delete('/api/users/:id', authenticateToken, requireAdmin, (req, res) => {
 
 // Get harvest data - All users see the same shared data
 app.get('/api/harvest', authenticateToken, (req, res) => {
-    const userId = req.user.userId;
-    db.all('SELECT * FROM harvest_data WHERE user_id = ? ORDER BY date DESC', [userId], (err, rows) => {
+    db.all('SELECT * FROM harvest_data ORDER BY date DESC', (err, rows) => {
         if (err) {
             console.error('Database error in harvest:', err);
             return res.status(500).json({ error: 'Database error' });
         }
-        console.log('Returning', rows.length, 'harvest records for user:', req.user.email, '(ID:', userId + ')');
+        console.log('Returning', rows.length, 'harvest records (shared data) for user:', req.user.email);
         res.json(rows);
     });
 });
@@ -837,13 +836,12 @@ app.post('/api/notes/bulk', authenticateToken, (req, res) => {
 
 // Get fertilizer data - All users see the same shared data
 app.get('/api/fertilizer', authenticateToken, (req, res) => {
-    const userId = req.user.userId;
-    db.all('SELECT * FROM fertilizer_data WHERE user_id = ? ORDER BY date DESC', [userId], (err, rows) => {
+    db.all('SELECT * FROM fertilizer_data ORDER BY date DESC', (err, rows) => {
         if (err) {
             console.error('Database error in fertilizer:', err);
             return res.status(500).json({ error: 'Database error' });
         }
-        console.log('Returning', rows.length, 'fertilizer records for user:', req.user.email, '(ID:', userId + ')');
+        console.log('Returning', rows.length, 'fertilizer records (shared data) for user:', req.user.email);
         res.json(rows);
     });
 });
@@ -959,16 +957,15 @@ app.delete('/api/fertilizer/:id', authenticateToken, (req, res) => {
 
 // Get palm tree data - All users see the same shared data
 app.get('/api/palmtrees', authenticateToken, (req, res) => {
-    const userId = req.user.userId;
-    db.all('SELECT * FROM palm_tree_data WHERE user_id = ? ORDER BY harvest_date DESC', [userId], (err, rows) => {
+    db.all('SELECT * FROM palm_tree_data ORDER BY harvest_date DESC', (err, rows) => {
         if (err) {
             console.error('Database error in palmtrees:', err);
             return res.status(500).json({ error: 'Database error' });
         }
-        console.log('📊 Total rows for user', userId + ':', rows.length);
+        console.log('📊 Total shared palmtree rows:', rows.length);
         console.log('🔍 First 3 rows:', rows.slice(0, 3));
         console.log('🔍 Last 3 rows:', rows.slice(-3));
-        console.log('Returning', rows.length, 'palmtree records for user:', req.user.email, '(ID:', userId + ')');
+        console.log('Returning', rows.length, 'palmtree records (shared data) for user:', req.user.email);
         res.json(rows);
     });
 });
@@ -1096,19 +1093,17 @@ app.delete('/api/palmtrees/:id', authenticateToken, (req, res) => {
 
 // Get notes
 app.get('/api/notes', authenticateToken, (req, res) => {
-    // Return notes filtered by user_id
-    const userId = req.user.userId;
-    const query = 'SELECT * FROM notes_data WHERE user_id = ? ORDER BY date DESC';
-    const params = [userId];
+    // Return all notes (shared data)
+    const query = 'SELECT * FROM notes_data ORDER BY date DESC';
 
-    console.log('GET /api/notes - User:', req.user.email, 'Role:', req.user.role, 'ID:', userId, 'Query:', query, 'Params:', params);
+    console.log('GET /api/notes - User:', req.user.email, 'Role:', req.user.role, 'Query:', query);
 
-    db.all(query, params, (err, rows) => {
+    db.all(query, (err, rows) => {
         if (err) {
             console.error('Database error in notes:', err);
             return res.status(500).json({ error: 'Database error' });
         }
-        console.log('Returning', rows.length, 'notes records for user:', req.user.email);
+        console.log('Returning', rows.length, 'notes records (shared data) for user:', req.user.email);
         res.json(rows);
     });
 });
@@ -1278,14 +1273,13 @@ app.get('/api/stats', authenticateToken, (req, res) => {
     const userId = req.user.userId;
     
     const promises = [
-        // Harvest stats - filtered by user_id
+        // Harvest stats - all data (shared)
         new Promise((resolve, reject) => {
-            const query = 'SELECT COUNT(*) as count, SUM(total_revenue) as revenue, SUM(net_profit) as profit FROM harvest_data WHERE user_id = ?';
-            const params = [userId];
+            const query = 'SELECT COUNT(*) as count, SUM(total_revenue) as revenue, SUM(net_profit) as profit FROM harvest_data';
             
-            console.log('Stats harvest query:', query, 'params:', params);
+            console.log('Stats harvest query:', query);
             
-            db.get(query, params, (err, row) => {
+            db.get(query, (err, row) => {
                 if (err) {
                     console.error('Harvest stats error:', err);
                     reject(err);
@@ -1296,14 +1290,13 @@ app.get('/api/stats', authenticateToken, (req, res) => {
             });
         }),
         
-        // Fertilizer stats - filtered by user_id
+        // Fertilizer stats - all data (shared)
         new Promise((resolve, reject) => {
-            const query = 'SELECT COUNT(*) as count, SUM(total_cost) as cost FROM fertilizer_data WHERE user_id = ?';
-            const params = [userId];
+            const query = 'SELECT COUNT(*) as count, SUM(total_cost) as cost FROM fertilizer_data';
             
-            console.log('Stats fertilizer query:', query, 'params:', params);
+            console.log('Stats fertilizer query:', query);
             
-            db.get(query, params, (err, row) => {
+            db.get(query, (err, row) => {
                 if (err) {
                     console.error('Fertilizer stats error:', err);
                     reject(err);
@@ -1314,14 +1307,13 @@ app.get('/api/stats', authenticateToken, (req, res) => {
             });
         }),
         
-        // Palm tree stats - filtered by user_id
+        // Palm tree stats - all data (shared)
         new Promise((resolve, reject) => {
-            const query = 'SELECT COUNT(DISTINCT tree_id) as count FROM palm_tree_data WHERE user_id = ?';
-            const params = [userId];
+            const query = 'SELECT COUNT(DISTINCT tree_id) as count FROM palm_tree_data';
             
-            console.log('Stats palmtree query:', query, 'params:', params);
+            console.log('Stats palmtree query:', query);
             
-            db.get(query, params, (err, row) => {
+            db.get(query, (err, row) => {
                 if (err) {
                     console.error('Palmtree stats error:', err);
                     reject(err);
@@ -1390,7 +1382,7 @@ app.get('/api/yearly-stats', authenticateToken, (req, res) => {
                     SUM(total_revenue) as total_revenue,
                     SUM(net_profit) as total_profit
                    FROM harvest_data
-                   WHERE user_id = ? AND date IS NOT NULL
+                   WHERE date IS NOT NULL
                    GROUP BY CASE
                        WHEN date LIKE '____-__-__' THEN strftime('%Y', date)
                        WHEN date LIKE '__/__/____' THEN substr(date, -4)
@@ -1398,7 +1390,7 @@ app.get('/api/yearly-stats', authenticateToken, (req, res) => {
                        ELSE substr(date, -4)
                    END
                    ORDER BY year`;
-            const params = [userId];
+            const params = [];
             
             db.all(query, params, (err, rows) => {
                 if (err) {
@@ -1419,10 +1411,10 @@ app.get('/api/yearly-stats', authenticateToken, (req, res) => {
                 SUM(amount) as total_amount,
                 SUM(total_cost) as total_cost
                FROM fertilizer_data 
-               WHERE user_id = ?
+               WHERE date IS NOT NULL
                GROUP BY strftime('%Y', date)
                ORDER BY year`;
-            const params = [userId];
+            const params = [];
             
             db.all(query, params, (err, rows) => {
                 if (err) {
@@ -1449,7 +1441,7 @@ app.get('/api/yearly-stats', authenticateToken, (req, res) => {
                     COUNT(DISTINCT tree_id) as unique_trees,
                     SUM(bunch_count) as total_bunches
                    FROM palm_tree_data
-                   WHERE user_id = ?
+                   WHERE harvest_date IS NOT NULL
                    GROUP BY CASE
                        WHEN harvest_date LIKE '____-__-__' THEN strftime('%Y', harvest_date)
                        WHEN harvest_date LIKE '__/__/____' THEN substr(harvest_date, -4)
@@ -1457,7 +1449,7 @@ app.get('/api/yearly-stats', authenticateToken, (req, res) => {
                        ELSE substr(harvest_date, -4)
                    END
                    ORDER BY year`;
-            const params = [userId];
+            const params = [];
             
             db.all(query, params, (err, rows) => {
                 if (err) {
@@ -1544,10 +1536,10 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
                         SUM(total_weight) as total_weight,
                         COUNT(*) as total_harvests
                     FROM harvest_data 
-                    WHERE user_id = ? AND date BETWEEN ? AND ?
+                    WHERE date BETWEEN ? AND ?
                 `;
                 
-                db.get(query, [user_id, 
+                db.get(query, [
                     lastMonth.toISOString().split('T')[0],
                     lastMonthEnd.toISOString().split('T')[0]
                 ], (err, row) => {
@@ -1584,10 +1576,10 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
                         SUM(fallen_weight) as fallen_weight,
                         COUNT(*) as total_harvests
                     FROM harvest_data 
-                    WHERE user_id = ? AND date BETWEEN ? AND ?
+                    WHERE date BETWEEN ? AND ?
                 `;
                 
-                db.get(query, [user_id,
+                db.get(query, [
                     firstDay.toISOString().split('T')[0],
                     lastDay.toISOString().split('T')[0]
                 ], (err, row) => {
@@ -1634,10 +1626,10 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
                         SUM(fallen_weight) as fallen_weight,
                         COUNT(*) as total_harvests
                     FROM harvest_data 
-                    WHERE user_id = ? AND date BETWEEN ? AND ?
+                    WHERE date BETWEEN ? AND ?
                 `;
                 
-                db.get(query, [user_id,
+                db.get(query, [
                     lastMonth.toISOString().split('T')[0],
                     lastMonthEnd.toISOString().split('T')[0]
                 ], (err, row) => {
@@ -1685,10 +1677,10 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
                         MAX(price_per_kg) as max_price,
                         COUNT(*) as total_harvests
                     FROM harvest_data 
-                    WHERE user_id = ? AND date BETWEEN ? AND ? AND total_weight > 0
+                    WHERE date BETWEEN ? AND ? AND total_weight > 0
                 `;
                 
-                db.get(query, [user_id,
+                db.get(query, [
                     firstDay.toISOString().split('T')[0],
                     lastDay.toISOString().split('T')[0]
                 ], (err, row) => {
@@ -1730,10 +1722,10 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
                         MAX(price_per_kg) as max_price,
                         COUNT(*) as total_harvests
                     FROM harvest_data 
-                    WHERE user_id = ? AND date BETWEEN ? AND ? AND total_weight > 0
+                    WHERE date BETWEEN ? AND ? AND total_weight > 0
                 `;
                 
-                db.get(query, [user_id,
+                db.get(query, [
                     lastMonth.toISOString().split('T')[0],
                     lastMonthEnd.toISOString().split('T')[0]
                 ], (err, row) => {
@@ -1767,12 +1759,11 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
                 const query = `
                     SELECT date, fertilizer_type, amount, total_cost, labor_cost
                     FROM fertilizer_data 
-                    WHERE user_id = ? 
                     ORDER BY date DESC 
                     LIMIT 1
                 `;
 
-                db.get(query, [user_id], (err, row) => {
+                db.get(query, (err, row) => {
                     if (err) {
                         reject(err);
                         return;
@@ -1838,12 +1829,11 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
                 const query = `
                     SELECT date as last_harvest_date 
                     FROM harvest_data 
-                    WHERE user_id = ? 
                     ORDER BY date DESC 
                     LIMIT 1
                 `;
 
-                db.get(query, [user_id], (err, row) => {
+                db.get(query, (err, row) => {
                     if (err) {
                         reject(err);
                         return;
