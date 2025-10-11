@@ -274,7 +274,7 @@ class OfflineSearchEngine {
         const questionLower = question.toLowerCase();
         
         // รายได้เดือนนี้
-        if (questionLower.includes('รายได้') && (questionLower.includes('เดือนนี้') || questionLower.includes('เดือน'))) {
+        if (questionLower.includes('รายได้') && questionLower.includes('เดือนนี้')) {
             const currentDate = new Date();
             const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
             const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
@@ -284,7 +284,21 @@ class OfflineSearchEngine {
                 lastDay.toISOString().split('T')[0]
             );
             
-            return `รายได้เดือนนี้: ${(stats.total_revenue || 0).toLocaleString()} บาท จากการเก็บเกี่ยว ${stats.total_harvests || 0} ครั้ง`;
+            return `รายได้เดือนนี้ (${currentDate.toLocaleDateString('th-TH', {month: 'long'})}): ${(stats.total_revenue || 0).toLocaleString()} บาท จากการเก็บเกี่ยว ${stats.total_harvests || 0} ครั้ง`;
+        }
+
+        // รายได้เดือนที่แล้ว  
+        if (questionLower.includes('รายได้') && questionLower.includes('เดือนที่แล้ว')) {
+            const currentDate = new Date();
+            const lastMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+            const lastMonthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), 0);
+            
+            const stats = await this.getHarvestStats(userId,
+                lastMonth.toISOString().split('T')[0], 
+                lastMonthEnd.toISOString().split('T')[0]
+            );
+            
+            return `รายได้เดือนที่แล้ว (${lastMonth.toLocaleDateString('th-TH', {month: 'long'})}): ${(stats.total_revenue || 0).toLocaleString()} บาท จากการเก็บเกี่ยว ${stats.total_harvests || 0} ครั้ง`;
         }
 
         // ต้นไหนให้ผลผลิตเยอะที่สุด
@@ -311,22 +325,116 @@ class OfflineSearchEngine {
 
         // กำไรสุทธิ
         if (questionLower.includes('กำไร')) {
-            const currentDate = new Date();
-            const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-            const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-            
-            const stats = await this.getHarvestStats(userId,
-                firstDay.toISOString().split('T')[0],
-                lastDay.toISOString().split('T')[0]
-            );
-            
-            return `กำไรสุทธิเดือนนี้: ${(stats.total_profit || 0).toLocaleString()} บาท (รายได้ ${(stats.total_revenue || 0).toLocaleString()} - ค่าใช้จ่าย ${(stats.total_cost || 0).toLocaleString()})`;
+            // กำไรทั้งหมด
+            if (questionLower.includes('ทั้งหมด')) {
+                const stats = await this.getHarvestStats(userId, '2020-01-01', '2030-12-31');
+                return `กำไรสุทธิทั้งหมด: ${(stats.total_profit || 0).toLocaleString()} บาท (รายได้ ${(stats.total_revenue || 0).toLocaleString()} - ค่าใช้จ่าย ${(stats.total_cost || 0).toLocaleString()})`;
+            } else {
+                // กำไรเดือนนี้
+                const currentDate = new Date();
+                const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+                const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+                
+                const stats = await this.getHarvestStats(userId,
+                    firstDay.toISOString().split('T')[0],
+                    lastDay.toISOString().split('T')[0]
+                );
+                
+                return `กำไรสุทธิเดือนนี้: ${(stats.total_profit || 0).toLocaleString()} บาท (รายได้ ${(stats.total_revenue || 0).toLocaleString()} - ค่าใช้จ่าย ${(stats.total_cost || 0).toLocaleString()})`;
+            }
+        }
+
+        // น้ำหนักรวม
+        if (questionLower.includes('น้ำหนักรวม')) {
+            if (questionLower.includes('เดือนนี้')) {
+                const currentDate = new Date();
+                const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+                const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+                
+                const stats = await this.getHarvestStats(userId,
+                    firstDay.toISOString().split('T')[0],
+                    lastDay.toISOString().split('T')[0]
+                );
+                
+                return `น้ำหนักรวมเดือนนี้: ${(stats.total_weight || 0).toLocaleString()} กก. จากการเก็บเกี่ยว ${stats.total_harvests || 0} ครั้ง`;
+            } else if (questionLower.includes('เดือนที่แล้ว')) {
+                const currentDate = new Date();
+                const lastMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+                const lastMonthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), 0);
+                
+                const stats = await this.getHarvestStats(userId,
+                    lastMonth.toISOString().split('T')[0],
+                    lastMonthEnd.toISOString().split('T')[0]
+                );
+                
+                return `น้ำหนักรวมเดือนที่แล้ว: ${(stats.total_weight || 0).toLocaleString()} กก. จากการเก็บเกี่ยว ${stats.total_harvests || 0} ครั้ง`;
+            }
+        }
+
+        // ราคาเฉลี่ย
+        if (questionLower.includes('ราคาเฉลี่ย')) {
+            if (questionLower.includes('เดือนนี้')) {
+                const currentDate = new Date();
+                const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+                const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+                
+                const stats = await this.getHarvestStats(userId,
+                    firstDay.toISOString().split('T')[0],
+                    lastDay.toISOString().split('T')[0]
+                );
+                
+                return `ราคาเฉลี่ยเดือนนี้: ${(stats.avg_price || 0).toFixed(2)} บาท/กก. จากการเก็บเกี่ยว ${stats.total_harvests || 0} ครั้ง`;
+            } else if (questionLower.includes('เดือนที่แล้ว')) {
+                const currentDate = new Date();
+                const lastMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+                const lastMonthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), 0);
+                
+                const stats = await this.getHarvestStats(userId,
+                    lastMonth.toISOString().split('T')[0],
+                    lastMonthEnd.toISOString().split('T')[0]
+                );
+                
+                return `ราคาเฉลี่ยเดือนที่แล้ว: ${(stats.avg_price || 0).toFixed(2)} บาท/กก. จากการเก็บเกี่ยว ${stats.total_harvests || 0} ครั้ง`;
+            }
         }
 
         // เก็บเกี่ยวครั้งต่อไปเมื่อไหร่
         if (questionLower.includes('เก็บเกี่ยว') && (questionLower.includes('ครั้งต่อไป') || questionLower.includes('ต่อไป') || questionLower.includes('เมื่อไหร่'))) {
             const nextHarvest = await this.getNextHarvestDate(userId);
             return nextHarvest;
+        }
+
+        // ใส่ปุ๋ยครั้งล่าสุดเมื่อไหร่
+        if (questionLower.includes('ปุ๋ย') && questionLower.includes('ล่าสุด')) {
+            return new Promise((resolve, reject) => {
+                const query = `
+                    SELECT date, fertilizer_type, amount, total_cost 
+                    FROM fertilizer_data 
+                    ORDER BY date DESC 
+                    LIMIT 1
+                `;
+                
+                this.db.get(query, (err, row) => {
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+                    
+                    if (!row) {
+                        resolve('ยังไม่มีข้อมูลการใส่ปุ๋ย');
+                        return;
+                    }
+                    
+                    const date = new Date(row.date);
+                    const thaiDate = date.toLocaleDateString('th-TH', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                    });
+                    
+                    resolve(`ใส่ปุ๋ยครั้งล่าสุด: วันที่ ${thaiDate}\nประเภท: ${row.fertilizer_type}\nจำนวน: ${row.amount} กระสอบ\nค่าใช้จ่าย: ${row.total_cost.toLocaleString()} บาท`);
+                });
+            });
         }
 
         return "ขออภัย ไม่เข้าใจคำถาม ลองถามเกี่ยวกับ: รายได้เดือนนี้, กำไรสุทธิ, ต้นไหนให้ผลผลิตเยอะ, วันนี้วันที่เท่าไร, เก็บเกี่ยวครั้งต่อไปเมื่อไหร่, ใส่ปุ๋ยครั้งล่าสุดเมื่อไหร่";
