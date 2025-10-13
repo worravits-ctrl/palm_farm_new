@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        input { padding: 8px; margin: 5px; width: 250px; }
+        pre { background: #f8f9fa; padding: 10px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Admin Login Test</h1>
+    
+    <div>
+        <h3>1. ทดสอบการ Login</h3>
+        <input type="email" id="email" value="admin@palmoil.com" placeholder="Email">
+        <input type="password" id="password" value="admin" placeholder="Password">
+        <button onclick="testLogin()">Test Login</button>
+        <div id="loginResult" class="test-result"></div>
+    </div>
+
+    <div>
+        <h3>2. ตรวจสอบ LocalStorage</h3>
+        <button onclick="checkLocalStorage()">Check LocalStorage</button>
+        <div id="storageResult" class="test-result"></div>
+    </div>
+
+    <div>
+        <h3>3. ทดสอบ API Calls</h3>
+        <button onclick="testUserAPI()">Test /users API</button>
+        <div id="apiResult" class="test-result"></div>
+    </div>
+
+    <div>
+        <h3>4. Debug Info</h3>
+        <button onclick="showDebugInfo()">Show Debug Info</button>
+        <div id="debugResult" class="test-result"></div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:3001/api';
+
+        async function testLogin() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('loginResult');
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // บันทึก token และ user ข้อมูล
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    
+                    resultDiv.className = 'test-result success';
+                    resultDiv.innerHTML = `
+                        <h4>✅ Login สำเร็จ!</h4>
+                        <p><strong>User ID:</strong> ${data.user.id}</p>
+                        <p><strong>Email:</strong> ${data.user.email}</p>
+                        <p><strong>Role:</strong> ${data.user.role}</p>
+                        <p><strong>Username:</strong> ${data.user.username}</p>
+                    `;
+                } else {
+                    resultDiv.className = 'test-result error';
+                    resultDiv.innerHTML = `<h4>❌ Login ล้มเหลว</h4><p>${data.error || data.message}</p>`;
+                }
+            } catch (error) {
+                resultDiv.className = 'test-result error';
+                resultDiv.innerHTML = `<h4>❌ เกิดข้อผิดพลาด</h4><p>${error.message}</p>`;
+            }
+        }
+
+        function checkLocalStorage() {
+            const resultDiv = document.getElementById('storageResult');
+            const token = localStorage.getItem('token');
+            const userStr = localStorage.getItem('user');
+            
+            if (token && userStr) {
+                try {
+                    const user = JSON.parse(userStr);
+                    resultDiv.className = 'test-result success';
+                    resultDiv.innerHTML = `
+                        <h4>✅ LocalStorage OK</h4>
+                        <p><strong>Token exists:</strong> ${token ? 'Yes' : 'No'}</p>
+                        <p><strong>Token preview:</strong> ${token?.substring(0, 50)}...</p>
+                        <p><strong>User data:</strong></p>
+                        <pre>${JSON.stringify(user, null, 2)}</pre>
+                    `;
+                } catch (e) {
+                    resultDiv.className = 'test-result error';
+                    resultDiv.innerHTML = `<h4>❌ User data ผิดรูปแบบ</h4><p>${e.message}</p>`;
+                }
+            } else {
+                resultDiv.className = 'test-result error';
+                resultDiv.innerHTML = `<h4>❌ ไม่มีข้อมูลใน LocalStorage</h4>`;
+            }
+        }
+
+        async function testUserAPI() {
+            const resultDiv = document.getElementById('apiResult');
+            const token = localStorage.getItem('token');
+
+            if (!token) {
+                resultDiv.className = 'test-result error';
+                resultDiv.innerHTML = `<h4>❌ ไม่มี Token</h4><p>กรุณา Login ก่อน</p>`;
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/users`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    resultDiv.className = 'test-result success';
+                    resultDiv.innerHTML = `
+                        <h4>✅ Users API สำเร็จ</h4>
+                        <p><strong>จำนวนผู้ใช้:</strong> ${data.length}</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.className = 'test-result error';
+                    resultDiv.innerHTML = `
+                        <h4>❌ Users API ล้มเหลว</h4>
+                        <p><strong>Status:</strong> ${response.status}</p>
+                        <p><strong>Error:</strong> ${data.error || data.message}</p>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.className = 'test-result error';
+                resultDiv.innerHTML = `<h4>❌ เกิดข้อผิดพลาด</h4><p>${error.message}</p>`;
+            }
+        }
+
+        function showDebugInfo() {
+            const resultDiv = document.getElementById('debugResult');
+            const userStr = localStorage.getItem('user');
+            let user = null;
+
+            try {
+                user = userStr ? JSON.parse(userStr) : null;
+            } catch (e) {
+                // ignore
+            }
+
+            resultDiv.className = 'test-result';
+            resultDiv.innerHTML = `
+                <h4>🔍 Debug Information</h4>
+                <p><strong>Current URL:</strong> ${window.location.href}</p>
+                <p><strong>API Base URL:</strong> ${API_BASE_URL}</p>
+                <p><strong>User logged in:</strong> ${user ? 'Yes' : 'No'}</p>
+                <p><strong>User role:</strong> ${user?.role || 'N/A'}</p>
+                <p><strong>Is admin:</strong> ${user?.role === 'admin' ? 'Yes' : 'No'}</p>
+                <p><strong>LocalStorage keys:</strong> ${Object.keys(localStorage).join(', ')}</p>
+            `;
+        }
+
+        // Auto-check localStorage on page load
+        window.onload = function() {
+            checkLocalStorage();
+        };
+    </script>
+</body>
+</html>

@@ -92,49 +92,26 @@
             ? 'http://localhost:3001/api'
             : `${window.location.protocol}//${window.location.host}/api`;
         
-        console.log('🔧 API_BASE_URL configured as:', API_BASE_URL);
-        console.log('🔧 Current hostname:', window.location.hostname);
-        
         // API Helper Functions
         const api = {
             // Auth
             login: async (email, password) => {
                 console.log('🔐 Attempting login with:', { email, password: '***' });
-                const loginUrl = `${API_BASE_URL}/auth/login`;
-                console.log('🔗 Login URL:', loginUrl);
+                const response = await fetch(`${API_BASE_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
                 
-                try {
-                    const response = await fetch(loginUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ email, password })
-                    });
-                    
-                    console.log('📡 Login response status:', response.status);
-                    console.log('📡 Login response URL:', response.url);
-                    
-                    const contentType = response.headers.get('content-type');
-                    console.log('📡 Content-Type:', contentType);
-                    
-                    if (contentType && contentType.includes('application/json')) {
-                        const data = await response.json();
-                        console.log('📡 Login response data:', data);
-                        
-                        if (!response.ok) {
-                            throw new Error(data.error || 'Login failed');
-                        }
-                        
-                        return data;
-                    } else {
-                        const text = await response.text();
-                        console.log('📡 Login response (text):', text.substring(0, 200));
-                        throw new Error('Server returned non-JSON response');
-                    }
-                    
-                } catch (error) {
-                    console.error('🚨 Fetch error:', error);
-                    throw error;
+                console.log('📡 Login response status:', response.status);
+                const data = await response.json();
+                console.log('📡 Login response data:', data);
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Login failed');
                 }
+                
+                return data;
             },
             
             register: async (username, email, password) => {
@@ -311,39 +288,6 @@
             return isNaN(date.getTime()) ? new Date(0) : date;
         };
 
-        // Helper function to format dates in Thai format
-        const formatDateThai = (dateString) => {
-            if (!dateString) return '-';
-
-            const monthsThai = [
-                'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
-                'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
-            ];
-
-            // Handle YYYY-MM-DD format (ISO format from database)
-            let date;
-            if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-                date = new Date(dateString);
-            } else if (typeof dateString === 'string' && /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateString)) {
-                // Handle DD/MM/YYYY format
-                const parts = dateString.split('/');
-                const day = parseInt(parts[0]);
-                const month = parseInt(parts[1]) - 1; // Month is 0-based
-                const year = parseInt(parts[2]);
-                date = new Date(year, month, day);
-            } else {
-                date = new Date(dateString);
-            }
-
-            if (isNaN(date.getTime())) return '-';
-
-            const day = date.getDate();
-            const monthThai = monthsThai[date.getMonth()];
-            const year = date.getFullYear() + 543; // Convert to Buddhist era
-
-            return `${day} ${monthThai} ${year}`;
-        };
-
         const App = () => {
           const [currentUser, setCurrentUser] = useState(null);
           const [activeTab, setActiveTab] = useState('login');
@@ -360,11 +304,6 @@
           const [voiceSupported, setVoiceSupported] = useState(false);
           const [speechRecognition, setSpeechRecognition] = useState(null);
 
-          // Search-related states
-          const [searchQuery, setSearchQuery] = useState('');
-          const [searchResults, setSearchResults] = useState([]);
-          const [searchLoading, setSearchLoading] = useState(false);
-
           // Data states
           const [harvestData, setHarvestData] = useState([]);
           const [harvestSortOrder, setHarvestSortOrder] = useState('desc'); // 'desc' = latest first
@@ -375,13 +314,15 @@
           const [notesData, setNotesData] = useState([]);
           const [notesSortOrder, setNotesSortOrder] = useState('desc'); // 'desc' = latest first
           const [users, setUsers] = useState([]);
+          
+          // Search states
+          const [harvestSearch, setHarvestSearch] = useState('');
+          const [fertilizerSearch, setFertilizerSearch] = useState('');
+          const [palmTreeSearch, setPalmTreeSearch] = useState('');
+          const [notesSearch, setNotesSearch] = useState('');
+          
           const [stats, setStats] = useState({});
           const [yearlyStats, setYearlyStats] = useState({ harvest: [], fertilizer: [], palmtrees: [] });
-
-          // Palm tree visualization states
-          const [palmTreeList, setPalmTreeList] = useState([]);
-          const [selectedTreeHistory, setSelectedTreeHistory] = useState(null);
-          const [showTreeModal, setShowTreeModal] = useState(false);
 
           // Edit modal states
           const [showEditModal, setShowEditModal] = useState(false);
@@ -430,29 +371,16 @@
               recognition.onresult = (event) => {
                 const transcript = event.results[0][0].transcript;
                 console.log('🗣️ Voice input:', transcript);
+                setGeminiInput(transcript);
                 setIsListening(false);
                 
-                // Set input based on active tab
-                if (activeTab === 'search') {
-                  setSearchQuery(transcript);
-                  // Auto-search after voice input
-                  setTimeout(() => {
-                    if (transcript.trim()) {
-                      // Simulate search query
-                      setSearchQuery(transcript);
-                      setTimeout(() => handleSearchQuery(), 500);
-                    }
-                  }, 1000);
-                } else {
-                  setGeminiInput(transcript);
-                  // Auto-send after voice input (for hands-free operation)
-                  setTimeout(() => {
-                    if (transcript.trim()) {
-                      const fakeEvent = { preventDefault: () => {} };
-                      handleGeminiSend(fakeEvent);
-                    }
-                  }, 1000);
-                }
+                // Auto-send after voice input (for hands-free operation)
+                setTimeout(() => {
+                  if (transcript.trim()) {
+                    const fakeEvent = { preventDefault: () => {} };
+                    handleGeminiSend(fakeEvent);
+                  }
+                }, 1000);
               };
               
               recognition.onerror = (event) => {
@@ -510,10 +438,7 @@
               const status = await response.json();
               console.log('🔍 API Status:', status);
               
-              if (status.search?.mode === 'offline') {
-                console.log('✅ Using Offline Search Engine');
-                setGeminiStatus('ready');
-              } else if (!status.gemini?.configured) {
+              if (!status.gemini.configured) {
                 console.warn('⚠️ Gemini API key is not configured on server');
                 setGeminiStatus('unavailable');
               } else {
@@ -522,62 +447,6 @@
             } catch (error) {
               console.error('❌ Failed to check API status:', error);
               setGeminiStatus('unavailable');
-            }
-          };
-
-          // Search Functions
-          const handleSearchQuery = async () => {
-            if (!searchQuery.trim()) return;
-            
-            setSearchLoading(true);
-            try {
-              const token = localStorage.getItem('token');
-              const response = await fetch(`${API_BASE_URL}/chat`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                  message: searchQuery.trim(),
-                  context: {
-                    currentDate: new Date().toLocaleDateString('th-TH'),
-                    currentDateISO: new Date().toISOString().split('T')[0],
-                    currentYear: new Date().getFullYear(),
-                    buddhistYear: new Date().getFullYear() + 543,
-                    currentMonth: new Date().getMonth() + 1,
-                    userName: currentUser?.email || 'ผู้ใช้'
-                  }
-                })
-              });
-
-              const data = await response.json();
-              
-              if (response.ok) {
-                const newResult = {
-                  query: searchQuery,
-                  answer: data.message,
-                  timestamp: new Date().toISOString()
-                };
-                
-                setSearchResults(prev => [newResult, ...prev]);
-                setSearchQuery('');
-              } else {
-                alert('เกิดข้อผิดพลาดในการค้นหา: ' + (data.message || data.error));
-              }
-            } catch (error) {
-              console.error('Search error:', error);
-              alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
-            } finally {
-              setSearchLoading(false);
-            }
-          };
-
-          const toggleVoiceInput = () => {
-            if (isListening) {
-              stopVoiceRecording();
-            } else {
-              startVoiceRecording();
             }
           };
           
@@ -686,9 +555,6 @@
               const statsRes = await api.call('/stats');
               await delay(100);
               
-              const palmTreeListRes = await api.call('/palmtrees/list');
-              await delay(100);
-              
               const usersRes = user?.role === 'admin' ? await api.call('/users') : [];
 
               console.log('API responses:', {
@@ -705,7 +571,6 @@
               setPalmTreeData((palmtreeRes || []).sort((a, b) => parseDateForSorting(b.harvest_date || b.date) - parseDateForSorting(a.harvest_date || a.date)));
               setNotesData((notesRes || []).sort((a, b) => parseDateForSorting(b.date) - parseDateForSorting(a.date)));
               setStats(statsRes || {});
-              setPalmTreeList(palmTreeListRes || []);
               if (user?.role === 'admin') {
                 console.log('Setting users data:', usersRes);
                 setUsers(usersRes || []);
@@ -839,6 +704,92 @@
             } catch (error) {
               alert('เกิดข้อผิดพลาดในการเปลี่ยนบทบาท');
             }
+          };
+
+          // Handle Fertilizer Submit
+          const handleFertilizerSubmit = async (e) => {
+            e.preventDefault();
+            setLoading(true);
+            
+            try {
+              const formData = new FormData(e.target);
+              const amount = parseInt(formData.get('amount'));
+              const costPerBag = parseFloat(formData.get('costPerBag'));
+              const laborCost = parseFloat(formData.get('laborCost'));
+              
+              const data = {
+                date: formData.get('date'),
+                fertilizer_type: formData.get('fertilizerType'),
+                amount: amount,
+                cost_per_bag: costPerBag,
+                labor_cost: laborCost,
+                total_cost: (amount * costPerBag) + laborCost,
+                supplier: formData.get('supplier') || '',
+                notes: formData.get('notes') || ''
+              };
+
+              console.log('Submitting fertilizer data:', data);
+              
+              const result = await api.call('/fertilizer', {
+                method: 'POST',
+                body: JSON.stringify(data)
+              });
+              
+              console.log('Fertilizer added:', result);
+              e.target.reset();
+              await loadAllData();
+              alert('เพิ่มข้อมูลปุ๋ยสำเร็จ');
+            } catch (error) {
+              console.error('Fertilizer submit error:', error);
+              const errorMessage = error.message || 'เกิดข้อผิดพลาดในการเพิ่มข้อมูลปุ๋ย';
+              alert(`เกิดข้อผิดพลาด: ${errorMessage}`);
+            } finally {
+              setLoading(false);
+            }
+          };
+
+          // Data filtering functions
+          const filterHarvestData = () => {
+            if (!harvestSearch.trim()) return harvestData;
+            return harvestData.filter(item => 
+              item.date?.toLowerCase().includes(harvestSearch.toLowerCase()) ||
+              item.total_weight?.toString().includes(harvestSearch) ||
+              item.price_per_kg?.toString().includes(harvestSearch) ||
+              item.total_revenue?.toString().includes(harvestSearch) ||
+              item.net_profit?.toString().includes(harvestSearch)
+            );
+          };
+
+          const filterFertilizerData = () => {
+            if (!fertilizerSearch.trim()) return fertilizerData;
+            return fertilizerData.filter(item => 
+              item.date?.toLowerCase().includes(fertilizerSearch.toLowerCase()) ||
+              item.fertilizer_type?.toLowerCase().includes(fertilizerSearch.toLowerCase()) ||
+              item.supplier?.toLowerCase().includes(fertilizerSearch.toLowerCase()) ||
+              item.amount?.toString().includes(fertilizerSearch) ||
+              item.cost_per_bag?.toString().includes(fertilizerSearch) ||
+              item.total_cost?.toString().includes(fertilizerSearch) ||
+              item.notes?.toLowerCase().includes(fertilizerSearch.toLowerCase())
+            );
+          };
+
+          const filterPalmTreeData = () => {
+            if (!palmTreeSearch.trim()) return palmTreeData;
+            return palmTreeData.filter(item => 
+              item.tree_id?.toLowerCase().includes(palmTreeSearch.toLowerCase()) ||
+              item.harvest_date?.toLowerCase().includes(palmTreeSearch.toLowerCase()) ||
+              item.bunch_count?.toString().includes(palmTreeSearch) ||
+              item.notes?.toLowerCase().includes(palmTreeSearch.toLowerCase())
+            );
+          };
+
+          const filterNotesData = () => {
+            if (!notesSearch.trim()) return notesData;
+            return notesData.filter(item => 
+              item.date?.toLowerCase().includes(notesSearch.toLowerCase()) ||
+              item.title?.toLowerCase().includes(notesSearch.toLowerCase()) ||
+              item.content?.toLowerCase().includes(notesSearch.toLowerCase())
+            );
           };
 
           // CSV Export/Import Functions
@@ -1201,21 +1152,6 @@
             }
           };
 
-          // Handle palm tree icon click
-          const handleTreeClick = async (treeId) => {
-            try {
-              setLoading(true);
-              const response = await api.call(`/palmtrees/${treeId}/history`);
-              setSelectedTreeHistory(response);
-              setShowTreeModal(true);
-            } catch (error) {
-              console.error('Error loading tree history:', error);
-              alert('ไม่สามารถโหลดประวัติต้นปาล์มได้: ' + error.message);
-            } finally {
-              setLoading(false);
-            }
-          };
-
           // AuthForm Component
           const AuthForm = () => (
             <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center p-4">
@@ -1376,7 +1312,6 @@
                       {key: 'fertilizer', label: 'ปุ๋ย'}, 
                       {key: 'palmtrees', label: 'ต้นปาล์ม'}, 
                       {key: 'notes', label: 'บันทึก'}, 
-                      {key: 'search', label: 'ค้นหาข้อมูล'}, 
                       {key: 'reports', label: 'รายงาน'},
                       ...(currentUser?.role === 'admin' ? [{key: 'users', label: 'จัดการสมาชิก'}] : [])
                     ].map((tab) => (
@@ -1506,16 +1441,46 @@
 
                     {/* Harvest Data Table */}
                     <div className="bg-white p-6 rounded-xl shadow-md">
-                      <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-xl font-semibold text-gray-800">ข้อมูลการเก็บเกี่ยว ({harvestData.length} รายการ)</h3>
-                        <div className="flex gap-2">
-                          <input
-                            type="file"
-                            accept=".csv"
-                            onChange={(e) => importFromCSV(e, '/harvest', () => e.target.value = '')}
-                            className="hidden"
-                            id="harvest-import"
-                          />
+                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+                        <h3 className="text-xl font-semibold text-gray-800">ข้อมูลการเก็บเกี่ยว ({filterHarvestData().length} / {harvestData.length} รายการ)</h3>
+                        
+                        {/* Search Box */}
+                        <div className="w-full md:w-80">
+                          <div className="relative">
+                            <input
+                              type="text"
+                              placeholder="ค้นหา: วันที่, น้ำหนัก, ราคา, รายได้, กำไร..."
+                              value={harvestSearch}
+                              onChange={(e) => setHarvestSearch(e.target.value)}
+                              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                            />
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                              </svg>
+                            </div>
+                            {harvestSearch && (
+                              <button
+                                onClick={() => setHarvestSearch('')}
+                                className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                              >
+                                <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-wrap justify-end items-center mb-4 gap-2">
+                        <input
+                          type="file"
+                          accept=".csv"
+                          onChange={(e) => importFromCSV(e, '/harvest', () => e.target.value = '')}
+                          className="hidden"
+                          id="harvest-import"
+                        />
                           <label htmlFor="harvest-import" className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg cursor-pointer transition-colors">
                             📥 นำเข้า CSV
                           </label>
@@ -1533,7 +1498,7 @@
                             </div>
                           )}
                           
-                          {harvestData.length > 0 && (
+                          {currentUser?.role === 'admin' && harvestData.length > 0 && (
                             <button
                               onClick={async () => {
                                 console.log('🗑️ Delete All button clicked');
@@ -1587,12 +1552,14 @@
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">รายได้รวม</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ค่าแรงงาน</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">กำไรสุทธิ</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">จัดการ</th>
+                              {currentUser?.role === 'admin' && (
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">จัดการ</th>
+                              )}
                             </tr>
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
-                            {harvestData.length > 0 ? (
-                              harvestData.map((item) => (
+                            {filterHarvestData().length > 0 ? (
+                              filterHarvestData().map((item) => (
                                 <tr key={item.id} className="hover:bg-gray-50">
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(item.date)}</td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{parseFloat(item.total_weight).toFixed(1)}</td>
@@ -1602,29 +1569,31 @@
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">{parseFloat(item.total_revenue).toLocaleString()}</td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-medium">{parseFloat(item.harvesting_cost).toLocaleString()}</td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium">{parseFloat(item.net_profit).toLocaleString()}</td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    <div className="flex space-x-2">
-                                      <button
-                                        onClick={() => handleEdit(item, 'harvest')}
-                                        className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs transition-colors"
-                                        disabled={loading}
-                                      >
-                                        ✏️ แก้ไข
-                                      </button>
-                                      <button
-                                        onClick={() => handleDelete(item.id, 'harvest')}
-                                        className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs transition-colors"
-                                        disabled={loading}
-                                      >
-                                        🗑️ ลบ
-                                      </button>
-                                    </div>
-                                  </td>
+                                  {currentUser?.role === 'admin' && (
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                      <div className="flex space-x-2">
+                                        <button
+                                          onClick={() => handleEdit(item, 'harvest')}
+                                          className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs transition-colors"
+                                          disabled={loading}
+                                        >
+                                          ✏️ แก้ไข
+                                        </button>
+                                        <button
+                                          onClick={() => handleDelete(item.id, 'harvest')}
+                                          className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs transition-colors"
+                                          disabled={loading}
+                                        >
+                                          🗑️ ลบ
+                                        </button>
+                                      </div>
+                                    </td>
+                                  )}
                                 </tr>
                               ))
                             ) : (
                               <tr>
-                                <td colSpan="9" className="px-6 py-4 text-center text-sm text-gray-500">ยังไม่มีข้อมูลการเก็บเกี่ยว</td>
+                                <td colSpan="7" className="px-6 py-4 text-center text-sm text-gray-500">ยังไม่มีข้อมูลการเก็บเกี่ยว</td>
                               </tr>
                             )}
                           </tbody>
@@ -1729,6 +1698,163 @@
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Fertilizer Form */}
+                {activeTab === 'fertilizer' && (
+                  <div className="space-y-8">
+                    <h2 className="text-3xl font-bold text-gray-800">ปุ๋ยและสารเคมี</h2>
+                    
+                    {/* Add Fertilizer Form */}
+                    <div className="bg-white p-6 rounded-xl shadow-md">
+                      <h3 className="text-xl font-semibold text-gray-800 mb-4">เพิ่มข้อมูลปุ๋ยและสารเคมี</h3>
+                      <form onSubmit={handleFertilizerSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">วันที่</label>
+                          <input type="date" name="date" required disabled={loading} className="w-full p-2 border border-gray-300 rounded-lg disabled:opacity-50" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">ชนิดปุ๋ย/สารเคมี</label>
+                          <input type="text" name="fertilizerType" required disabled={loading} className="w-full p-2 border border-gray-300 rounded-lg disabled:opacity-50" placeholder="เช่น ปุ๋ยเคมี 16-16-16" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">จำนวน (กระสอบ)</label>
+                          <input type="number" name="amount" min="1" required disabled={loading} className="w-full p-2 border border-gray-300 rounded-lg disabled:opacity-50" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">ราคาต่อกระสอบ (บาท)</label>
+                          <input type="number" name="costPerBag" step="0.01" min="0" required disabled={loading} className="w-full p-2 border border-gray-300 rounded-lg disabled:opacity-50" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">ค่าแรงงาน (บาท)</label>
+                          <input type="number" name="laborCost" step="0.01" min="0" required disabled={loading} className="w-full p-2 border border-gray-300 rounded-lg disabled:opacity-50" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">ผู้จำหน่าย</label>
+                          <input type="text" name="supplier" disabled={loading} className="w-full p-2 border border-gray-300 rounded-lg disabled:opacity-50" placeholder="เช่น บริษัท ABC จำกัด" />
+                        </div>
+                        <div className="md:col-span-2 lg:col-span-3">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">หมายเหตุ</label>
+                          <textarea name="notes" rows="2" disabled={loading} className="w-full p-2 border border-gray-300 rounded-lg disabled:opacity-50" placeholder="บันทึกเพิ่มเติม..."></textarea>
+                        </div>
+                        <div className="md:col-span-2 lg:col-span-3">
+                          <button type="submit" disabled={loading} className="bg-purple-500 hover:bg-purple-600 text-white px-6 py-2 rounded-lg transition-colors disabled:opacity-50">
+                            {loading ? 'กำลังบันทึก...' : 'เพิ่มข้อมูลปุ๋ย'}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+
+                    {/* Fertilizer Data Table */}
+                    <div className="bg-white p-6 rounded-xl shadow-md">
+                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+                        <h3 className="text-xl font-semibold text-gray-800">ข้อมูลปุ๋ย ({filterFertilizerData().length} / {fertilizerData.length} รายการ)</h3>
+                        
+                        {/* Search Box */}
+                        <div className="w-full md:w-80">
+                          <div className="relative">
+                            <input
+                              type="text"
+                              placeholder="ค้นหา: วันที่, ชนิดปุ๋ย, ผู้จำหน่าย, จำนวน, ราคา..."
+                              value={fertilizerSearch}
+                              onChange={(e) => setFertilizerSearch(e.target.value)}
+                              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                            />
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                              </svg>
+                            </div>
+                            {fertilizerSearch && (
+                              <button
+                                onClick={() => setFertilizerSearch('')}
+                                className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                              >
+                                <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-wrap justify-end items-center mb-4 gap-2">
+                        <input
+                          type="file"
+                          accept=".csv"
+                          onChange={(e) => importFromCSV(e, '/fertilizer', () => e.target.value = '')}
+                          className="hidden"
+                          id="fertilizer-import"
+                        />
+                        <label htmlFor="fertilizer-import" className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg cursor-pointer transition-colors">
+                          📥 นำเข้า CSV
+                        </label>
+                        <button
+                          onClick={() => exportToCSV(fertilizerData, 'fertilizer_data', ['date', 'fertilizer_type', 'amount', 'cost_per_bag', 'labor_cost', 'total_cost', 'supplier', 'notes'])}
+                          className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors"
+                        >
+                          📤 ส่งออก CSV
+                        </button>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">วันที่</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ชนิดปุ๋ย</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">จำนวน</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ราคา/กระสอบ</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ค่าแรง</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">รวม</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ผู้จำหน่าย</th>
+                              {currentUser?.role === 'admin' && (
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">จัดการ</th>
+                              )}
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {filterFertilizerData().length === 0 ? (
+                              <tr>
+                                <td colSpan="8" className="px-6 py-4 text-center text-sm text-gray-500">ยังไม่มีข้อมูลปุ๋ย</td>
+                              </tr>
+                            ) : filterFertilizerData().map((item) => (
+                              <tr key={item.id} className="hover:bg-gray-50">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(item.date)}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.fertilizer_type}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.amount}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{parseFloat(item.cost_per_bag).toFixed(2)}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{parseFloat(item.labor_cost || 0).toFixed(2)}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">{parseFloat(item.total_cost).toFixed(2)}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.supplier || '-'}</td>
+                                {currentUser?.role === 'admin' && (
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    <div className="flex space-x-2">
+                                      <button
+                                        onClick={() => handleEdit(item, 'fertilizer')}
+                                        className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs transition-colors"
+                                        disabled={loading}
+                                      >
+                                        ✏️ แก้ไข
+                                      </button>
+                                      <button
+                                        onClick={() => handleDelete(item.id, 'fertilizer')}
+                                        className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs transition-colors"
+                                        disabled={loading}
+                                      >
+                                        🗑️ ลบ
+                                      </button>
+                                    </div>
+                                  </td>
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -2017,8 +2143,39 @@
 
                     {/* Fertilizer Data Table */}
                     <div className="bg-white p-6 rounded-xl shadow-md">
-                      <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-xl font-semibold text-gray-800">ข้อมูลปุ๋ย ({fertilizerData.length} รายการ)</h3>
+                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+                        <h3 className="text-xl font-semibold text-gray-800">ข้อมูลปุ๋ย ({filterFertilizerData().length} / {fertilizerData.length} รายการ)</h3>
+                        
+                        {/* Search Box */}
+                        <div className="w-full md:w-80">
+                          <div className="relative">
+                            <input
+                              type="text"
+                              placeholder="ค้นหา: วันที่, ชนิดปุ๋ย, ผู้จำหน่าย, จำนวน, ราคา..."
+                              value={fertilizerSearch}
+                              onChange={(e) => setFertilizerSearch(e.target.value)}
+                              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                            />
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                              </svg>
+                            </div>
+                            {fertilizerSearch && (
+                              <button
+                                onClick={() => setFertilizerSearch('')}
+                                className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                              >
+                                <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-wrap justify-end items-center mb-4 gap-2">
                         <div className="flex gap-2">
                           <input
                             type="file"
@@ -2060,7 +2217,9 @@
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ค่าจ้าง</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ค่าใช้จ่ายรวม</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ผู้จำหน่าย</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">จัดการ</th>
+                              {currentUser?.role === 'admin' && (
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">จัดการ</th>
+                              )}
                             </tr>
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
@@ -2070,7 +2229,7 @@
                                   ยังไม่มีข้อมูลปุ๋ย
                                 </td>
                               </tr>
-                            ) : fertilizerData.map((item) => (
+                            ) : filterFertilizerData().map((item) => (
                               <tr key={item.id} className="hover:bg-gray-50">
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                   {formatDate(item.date)}
@@ -2093,24 +2252,26 @@
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                   {item.supplier || '-'}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                  <div className="flex space-x-2">
-                                    <button
-                                      onClick={() => handleEdit(item, 'fertilizer')}
-                                      className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs transition-colors"
-                                      disabled={loading}
-                                    >
-                                      ✏️ แก้ไข
-                                    </button>
-                                    <button
-                                      onClick={() => handleDelete(item.id, 'fertilizer')}
-                                      className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs transition-colors"
-                                      disabled={loading}
-                                    >
-                                      🗑️ ลบ
-                                    </button>
-                                  </div>
-                                </td>
+                                {currentUser?.role === 'admin' && (
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    <div className="flex space-x-2">
+                                      <button
+                                        onClick={() => handleEdit(item, 'fertilizer')}
+                                        className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs transition-colors"
+                                        disabled={loading}
+                                      >
+                                        ✏️ แก้ไข
+                                      </button>
+                                      <button
+                                        onClick={() => handleDelete(item.id, 'fertilizer')}
+                                        className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs transition-colors"
+                                        disabled={loading}
+                                      >
+                                        🗑️ ลบ
+                                      </button>
+                                    </div>
+                                  </td>
+                                )}
                               </tr>
                             ))}
                           </tbody>
@@ -2366,8 +2527,39 @@
 
                     {/* Palm Trees Data Table */}
                     <div className="bg-white p-6 rounded-xl shadow-md">
-                      <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-xl font-semibold text-gray-800">ข้อมูลการเก็บเกี่ยวต้นปาล์ม ({palmTreeData.length} รายการ)</h3>
+                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+                        <h3 className="text-xl font-semibold text-gray-800">ข้อมูลการเก็บเกี่ยวต้นปาล์ม ({filterPalmTreeData().length} / {palmTreeData.length} รายการ)</h3>
+                        
+                        {/* Search Box */}
+                        <div className="w-full md:w-80">
+                          <div className="relative">
+                            <input
+                              type="text"
+                              placeholder="ค้นหา: รหัสต้น, วันที่, จำนวนทะลาย, หมายเหตุ..."
+                              value={palmTreeSearch}
+                              onChange={(e) => setPalmTreeSearch(e.target.value)}
+                              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                            />
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                              </svg>
+                            </div>
+                            {palmTreeSearch && (
+                              <button
+                                onClick={() => setPalmTreeSearch('')}
+                                className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                              >
+                                <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-wrap justify-end items-center mb-4 gap-2">
                         <div className="flex gap-2">
                           <input
                             type="file"
@@ -2385,7 +2577,7 @@
                           >
                             📤 ส่งออก CSV
                           </button>
-                          {palmTreeData.length > 0 && (
+                          {currentUser?.role === 'admin' && palmTreeData.length > 0 && (
                             <button
                               onClick={async () => {
                                 console.log('🗑️ Delete All Palm Trees button clicked');
@@ -2436,17 +2628,19 @@
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">จำนวนทะลาย</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">หมายเหตุ</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">วันที่บันทึก</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">จัดการ</th>
+                              {currentUser?.role === 'admin' && (
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">จัดการ</th>
+                              )}
                             </tr>
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
-                            {palmTreeData.length === 0 ? (
+                            {filterPalmTreeData().length === 0 ? (
                               <tr>
                                 <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
                                   ยังไม่มีข้อมูลการเก็บเกี่ยวต้นปาล์ม
                                 </td>
                               </tr>
-                              ) : palmTreeData.map((record, idx) => (
+                              ) : filterPalmTreeData().map((record, idx) => (
                                 <tr key={record.id || idx} className="hover:bg-gray-50">
                                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                                     <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-semibold">
@@ -2467,24 +2661,26 @@
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                     {record.created_at ? formatDate(record.created_at) : '-'}
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    <div className="flex space-x-2">
-                                      <button
-                                        onClick={() => handleEdit(record, 'palmtrees')}
-                                        className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs transition-colors"
-                                        disabled={loading}
-                                      >
-                                        ✏️ แก้ไข
-                                      </button>
-                                      <button
-                                        onClick={() => handleDelete(record.id, 'palmtrees')}
-                                        className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs transition-colors"
-                                        disabled={loading}
-                                      >
-                                        🗑️ ลบ
-                                      </button>
-                                    </div>
-                                  </td>
+                                  {currentUser?.role === 'admin' && (
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                      <div className="flex space-x-2">
+                                        <button
+                                          onClick={() => handleEdit(record, 'palmtrees')}
+                                          className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs transition-colors"
+                                          disabled={loading}
+                                        >
+                                          ✏️ แก้ไข
+                                        </button>
+                                        <button
+                                          onClick={() => handleDelete(record.id, 'palmtrees')}
+                                          className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs transition-colors"
+                                          disabled={loading}
+                                        >
+                                          🗑️ ลบ
+                                        </button>
+                                      </div>
+                                    </td>
+                                  )}
                                 </tr>
                               ))}
                           </tbody>
@@ -2657,8 +2853,39 @@
 
                     {/* Notes Data Table */}
                     <div className="bg-white p-6 rounded-xl shadow-md">
-                      <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-xl font-semibold text-gray-800">บันทึกทั้งหมด ({notesData.length} รายการ)</h3>
+                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+                        <h3 className="text-xl font-semibold text-gray-800">บันทึกทั้งหมด ({filterNotesData().length} / {notesData.length} รายการ)</h3>
+                        
+                        {/* Search Box */}
+                        <div className="w-full md:w-80">
+                          <div className="relative">
+                            <input
+                              type="text"
+                              placeholder="ค้นหา: วันที่, หัวข้อ, เนื้อหา..."
+                              value={notesSearch}
+                              onChange={(e) => setNotesSearch(e.target.value)}
+                              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                              </svg>
+                            </div>
+                            {notesSearch && (
+                              <button
+                                onClick={() => setNotesSearch('')}
+                                className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                              >
+                                <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-wrap justify-end items-center mb-4 gap-2">
                         <div className="flex gap-2 items-center">
                           <button
                             onClick={() => {
@@ -2694,31 +2921,33 @@
                         </div>
                       </div>
                       <div className="space-y-4">
-                        {notesData.length === 0 ? (
+                        {filterNotesData().length === 0 ? (
                           <div className="text-center py-8 text-gray-500">
                             ยังไม่มีบันทึก
                           </div>
-                        ) : notesData.map((note) => (
+                        ) : filterNotesData().map((note) => (
                           <div key={note.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
                             <div className="flex justify-between items-start mb-2">
                               <h4 className="text-lg font-semibold text-gray-800">{note.title}</h4>
                               <div className="flex gap-2 items-center">
-                                <div className="flex gap-1 ml-2">
-                                  <button
-                                    onClick={() => handleEdit(note, 'notes')}
-                                    className="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs transition-colors"
-                                    disabled={loading}
-                                  >
-                                    ✏️ แก้ไข
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(note.id, 'notes')}
-                                    className="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs transition-colors"
-                                    disabled={loading}
-                                  >
-                                    🗑️ ลบ
-                                  </button>
-                                </div>
+                                {currentUser?.role === 'admin' && (
+                                  <div className="flex gap-1 ml-2">
+                                    <button
+                                      onClick={() => handleEdit(note, 'notes')}
+                                      className="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs transition-colors"
+                                      disabled={loading}
+                                    >
+                                      ✏️ แก้ไข
+                                    </button>
+                                    <button
+                                      onClick={() => handleDelete(note.id, 'notes')}
+                                      className="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs transition-colors"
+                                      disabled={loading}
+                                    >
+                                      🗑️ ลบ
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             </div>
                             <p className="text-gray-700 mb-2">{note.content}</p>
@@ -2819,184 +3048,6 @@
                   </div>
                 )}
 
-                {/* Search Tab */}
-                {activeTab === 'search' && (
-                  <div className="space-y-8">
-                    <h2 className="text-3xl font-bold text-gray-800">🔍 ค้นหาข้อมูลด้วย AI Assistant</h2>
-
-                    {/* Palm Trees Visualization */}
-                    <div className="bg-white p-8 rounded-xl shadow-lg">
-                      <h3 className="text-xl font-semibold text-gray-800 mb-6">🌴 แผนที่ต้นปาล์ม (312 ต้น)</h3>
-                      
-                      {/* Desktop and Tablet View */}
-                      <div className="hidden md:block">
-                        <div className="grid gap-1 mb-6" style={{gridTemplateColumns: 'repeat(26, minmax(0, 1fr))'}}>
-                          {palmTreeList.map((tree) => (
-                            <div
-                              key={tree.tree_id}
-                              onClick={() => handleTreeClick(tree.tree_id)}
-                              className={`
-                                w-8 h-8 rounded-lg flex items-center justify-center font-bold cursor-pointer transition-all duration-200 hover:scale-110 hover:z-10 relative
-                                ${tree.status === 'active' 
-                                  ? tree.harvest_count > 5 
-                                    ? 'bg-green-600 text-white shadow-md' 
-                                    : 'bg-green-400 text-white shadow-sm'
-                                  : 'bg-gray-300 text-gray-600 border border-gray-400'
-                                }
-                              `}
-                              style={{fontSize: '8px'}}
-                              title={`${tree.tree_id} - เก็บเกี่ยว ${tree.harvest_count} ครั้ง, รวม ${tree.total_bunches} ทะลาย`}
-                            >
-                              {tree.tree_id}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Mobile View */}
-                      <div className="md:hidden">
-                        <div className="grid gap-2 mb-6" style={{gridTemplateColumns: 'repeat(13, minmax(0, 1fr))'}}>
-                          {palmTreeList.map((tree) => (
-                            <div
-                              key={tree.tree_id}
-                              onClick={() => handleTreeClick(tree.tree_id)}
-                              className={`
-                                w-12 h-12 rounded-xl flex items-center justify-center font-bold cursor-pointer transition-all duration-200 active:scale-95 relative border-2
-                                ${tree.status === 'active' 
-                                  ? tree.harvest_count > 5 
-                                    ? 'bg-green-600 text-white shadow-lg border-green-700' 
-                                    : 'bg-green-400 text-white shadow-md border-green-500'
-                                  : 'bg-gray-200 text-gray-700 border-gray-300'
-                                }
-                              `}
-                              style={{fontSize: '10px', lineHeight: '1'}}
-                              title={`${tree.tree_id} - เก็บเกี่ยว ${tree.harvest_count} ครั้ง, รวม ${tree.total_bunches} ทะลาย`}
-                            >
-                              <div className="text-center">
-                                <div className="font-extrabold">{tree.tree_id}</div>
-                                {tree.harvest_count > 0 && (
-                                  <div className="text-xs opacity-75">{tree.harvest_count}</div>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      
-                      {/* Legend - Responsive */}
-                      <div className="flex flex-wrap items-center gap-3 text-sm bg-gray-50 p-3 rounded-lg">
-                        <div className="flex items-center gap-2">
-                          <div className="w-5 h-5 bg-gray-200 border-2 border-gray-300 rounded-lg"></div>
-                          <span className="text-gray-700">ไม่เคยเก็บเกี่ยว</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-5 h-5 bg-green-400 border-2 border-green-500 rounded-lg"></div>
-                          <span className="text-gray-700">เก็บเกี่ยว 1-5 ครั้ง</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-5 h-5 bg-green-600 border-2 border-green-700 rounded-lg"></div>
-                          <span className="text-gray-700">เก็บเกี่ยวมากกว่า 5 ครั้ง</span>
-                        </div>
-                      </div>
-                      
-                      {/* Mobile Instructions */}
-                      <div className="md:hidden mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <p className="text-sm text-blue-700">
-                          💡 <strong>คำแนะนำ:</strong> แตะที่ไอคอนต้นปาล์ม (เช่น A1, B2) เพื่อดูประวัติการเก็บเกี่ยว
-                        </p>
-                        <p className="text-xs text-blue-600 mt-1">
-                          ตัวเลขเล็กด้านล่างรหัสแสดงจำนวนครั้งที่เก็บเกี่ยว
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Search Results */}
-                    {searchResults.length > 0 && (
-                      <div className="bg-white p-6 md:p-8 rounded-xl shadow-lg border border-green-200">
-                        <div className="flex justify-between items-center mb-4">
-                          <h3 className="text-lg md:text-xl font-semibold text-gray-800">💡 ผลลัพธ์การค้นหา</h3>
-                          <button
-                            onClick={() => setSearchResults([])}
-                            className="text-sm px-3 py-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
-                          >
-                            ล้างผลลัพธ์
-                          </button>
-                        </div>
-                        <div className="space-y-3">
-                          {searchResults.map((result, index) => (
-                            <div key={index} className="border-l-4 border-green-500 pl-4 py-3 bg-green-50 rounded-r-lg">
-                              <div className="flex flex-col md:flex-row md:justify-between md:items-start mb-2">
-                                <p className="text-sm text-gray-600 mb-1 md:mb-0">
-                                  <strong>คำถาม:</strong> {result.query}
-                                </p>
-                                <span className="text-xs text-gray-400">
-                                  {new Date(result.timestamp).toLocaleString('th-TH')}
-                                </span>
-                              </div>
-                              <p className="text-gray-800 leading-relaxed">
-                                <strong>คำตอบ:</strong> {result.answer}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Quick Search Examples */}
-                    <div className="bg-white p-8 rounded-xl shadow-lg">
-                      <h3 className="text-xl font-semibold text-gray-800 mb-6">✨ ตัวอย่างคำถามที่ถามได้</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {[
-                          "รายได้เดือนนี้เท่าไหร่?",
-                          "รายได้เดือนที่แล้วเท่าไหร่?",
-                          "เก็บเกี่ยวครั้งต่อไปเมื่อไหร่?",
-                          "กำไรสุทธิทั้งหมด",
-                          "วันนี้วันที่เท่าไหร่?",
-                          "ใส่ปุ๋ยครั้งล่าสุดเมื่อไหร่?",
-                          "น้ำหนักรวมเดือนที่แล้วเท่าไหร่",
-                          "น้ำหนักรวมเดือนนี้เท่าไหร่",
-                          "ราคาเฉลี่ยต่อกิโลกรัมเดือนที่แล้วเท่าไหร่",
-                          "ราคาเฉลี่ยต่อกิโลกรัมเดือนนี้เท่าไหร่"
-                        ].map((example, index) => (
-                          <button
-                            key={index}
-                            onClick={async () => {
-                              setSearchLoading(true);
-                              try {
-                                const response = await api.call('/search', {
-                                  method: 'POST',
-                                  body: JSON.stringify({ question: example })
-                                });
-                                
-                                const newResult = {
-                                  query: example,
-                                  answer: response.answer,
-                                  timestamp: new Date().toISOString()
-                                };
-                                
-                                setSearchResults(prev => [newResult, ...prev]);
-                              } catch (error) {
-                                console.error('Search error:', error);
-                                alert('เกิดข้อผิดพลาดในการค้นหา: ' + error.message);
-                              } finally {
-                                setSearchLoading(false);
-                              }
-                            }}
-                            disabled={searchLoading}
-                            className="text-left p-3 border border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            <span className="text-sm text-gray-600">💬 </span>
-                            <span className="text-gray-800">{example}</span>
-                            {searchLoading && (
-                              <div className="ml-2 inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-green-500"></div>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
                 {/* Reports Tab */}
                 {activeTab === 'reports' && (
                   <div className="space-y-8">
@@ -3044,28 +3095,6 @@
                         {/* Monthly Harvest Weight Chart */}
                         <div className="h-80">
                           <canvas id="monthlyHarvestWeightChart"></canvas>
-                        </div>
-
-                        {/* Monthly Price per KG Chart */}
-                        <div className="space-y-4">
-                          <div className="flex items-center gap-4">
-                            <h4 className="text-lg font-medium text-gray-700">📊 ราคาเฉลี่ยต่อกิโลกรัมรายเดือน</h4>
-                            <select 
-                              id="priceChartYearSelect"
-                              className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              onChange={(e) => window.updatePriceChart && window.updatePriceChart(parseInt(e.target.value))}
-                            >
-                              <option value="2025">ปี 2025 (2568)</option>
-                              <option value="2024">ปี 2024 (2567)</option>
-                              <option value="2023">ปี 2023 (2566)</option>
-                              <option value="2022">ปี 2022 (2565)</option>
-                              <option value="2021">ปี 2021 (2564)</option>
-                              <option value="2020">ปี 2020 (2563)</option>
-                            </select>
-                          </div>
-                          <div className="h-80">
-                            <canvas id="monthlyPricePerKgChart"></canvas>
-                          </div>
                         </div>
 
                       </div>
@@ -3180,7 +3209,7 @@
                 )}
 
                 {/* Other tabs show simple message */}
-                {!['dashboard', 'harvest', 'fertilizer', 'palmtrees', 'notes', 'search', 'users', 'reports'].includes(activeTab) && (
+                {!['dashboard', 'harvest', 'fertilizer', 'palmtrees', 'notes', 'users', 'reports'].includes(activeTab) && (
                   <div className="bg-white p-8 rounded-xl shadow-md text-center">
                     <h2 className="text-2xl font-bold text-gray-800 mb-4">หน้า {activeTab} กำลังพัฒนา</h2>
                     <p className="text-gray-600">ฟีเจอร์นี้จะเปิดให้ใช้งานเร็วๆ นี้</p>
@@ -3188,7 +3217,7 @@
                 )}
               </main>
 
-              {/* AI Assistant Chat Button */}
+              {/* Gemini AI Chat Button */}
               {currentUser && (
                 <button
                   onClick={() => setShowGeminiChat(!showGeminiChat)}
@@ -3198,7 +3227,7 @@
                     'bg-yellow-500 hover:bg-yellow-600'
                   }`}
                   title={
-                    geminiStatus === 'ready' ? 'ปรึกษา AI Assistant (Offline)' :
+                    geminiStatus === 'ready' ? 'ปรึกษา Gemini AI' :
                     geminiStatus === 'unavailable' ? 'AI ไม่พร้อมใช้งาน' :
                     'กำลังตรวจสอบ AI...'
                   }
@@ -3216,7 +3245,7 @@
                     {/* Chat Header */}
                     <div className="bg-green-600 text-white p-3 sm:p-4 rounded-t-lg flex justify-between items-center">
                       <div>
-                        <h3 className="text-base sm:text-lg font-semibold">ปรึกษา AI Assistant (Offline)</h3>
+                        <h3 className="text-base sm:text-lg font-semibold">ปรึกษา Gemini AI</h3>
                         <div className="text-xs sm:text-sm opacity-90 flex items-center space-x-2">
                           <span>
                             {geminiStatus === 'ready' && '🟢 พร้อมใช้งาน'}
@@ -3251,40 +3280,28 @@
                             <p className="font-medium text-gray-700 mb-2">💡 ตัวอย่างคำถาม:</p>
                             <div className="space-y-1 text-sm text-gray-600">
                               <button 
-                                onClick={() => setGeminiInput('รายได้เดือนนี้เท่าไหร่?')}
+                                onClick={() => setGeminiInput('วันนี้วันที่เท่าไหร่')}
                                 className="block w-full text-left hover:text-green-600 hover:bg-white p-1 rounded"
                               >
-                                💰 รายได้เดือนนี้เท่าไหร่?
+                                📅 วันนี้วันที่เท่าไหร่
                               </button>
                               <button 
-                                onClick={() => setGeminiInput('รายได้เดือนที่แล้วเท่าไหร่?')}
+                                onClick={() => setGeminiInput('รายได้เดือนนี้เท่าไหร่')}
                                 className="block w-full text-left hover:text-green-600 hover:bg-white p-1 rounded"
                               >
-                                💸 รายได้เดือนที่แล้วเท่าไหร่?
+                                💰 รายได้เดือนนี้เท่าไหร่
                               </button>
                               <button 
-                                onClick={() => setGeminiInput('น้ำหนักรวมเดือนนี้เท่าไหร่')}
+                                onClick={() => setGeminiInput('ใส่ปุ๋ยครั้งล่าสุดเมื่อไหร่')}
                                 className="block w-full text-left hover:text-green-600 hover:bg-white p-1 rounded"
                               >
-                                ⚖️ น้ำหนักรวมเดือนนี้เท่าไหร่
+                                🌱 ใส่ปุ๋ยครั้งล่าสุดเมื่อไหร่
                               </button>
                               <button 
-                                onClick={() => setGeminiInput('น้ำหนักรวมเดือนที่แล้วเท่าไหร่')}
+                                onClick={() => setGeminiInput('ต้นไหนให้ผลผลิตเยอะที่สุด')}
                                 className="block w-full text-left hover:text-green-600 hover:bg-white p-1 rounded"
                               >
-                                📊 น้ำหนักรวมเดือนที่แล้วเท่าไหร่
-                              </button>
-                              <button 
-                                onClick={() => setGeminiInput('ราคาเฉลี่ยต่อกิโลกรัมเดือนนี้เท่าไหร่')}
-                                className="block w-full text-left hover:text-green-600 hover:bg-white p-1 rounded"
-                              >
-                                💲 ราคาเฉลี่ยต่อกิโลกรัมเดือนนี้เท่าไหร่
-                              </button>
-                              <button 
-                                onClick={() => setGeminiInput('ราคาเฉลี่ยต่อกิโลกรัมเดือนที่แล้วเท่าไหร่')}
-                                className="block w-full text-left hover:text-green-600 hover:bg-white p-1 rounded"
-                              >
-                                📈 ราคาเฉลี่ยต่อกิโลกรัมเดือนที่แล้วเท่าไหร่
+                                🌴 ต้นไหนให้ผลผลิตเยอะที่สุด
                               </button>
                             </div>
                           </div>
@@ -3384,247 +3401,10 @@
                   </div>
                 </div>
               )}
-
-              {/* Tree History Modal */}
-              {showTreeModal && selectedTreeHistory && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                  <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                    {/* Modal Header */}
-                    <div className="flex justify-between items-center p-4 md:p-6 border-b bg-green-50">
-                      <h3 className="text-lg md:text-xl font-bold text-gray-800">
-                        🌴 ประวัติต้นปาล์ม {selectedTreeHistory.tree_id}
-                      </h3>
-                      <button
-                        onClick={() => setShowTreeModal(false)}
-                        className="text-gray-500 hover:text-gray-700 text-2xl w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 transition-colors"
-                      >
-                        ×
-                      </button>
-                    </div>
-
-                    {/* Modal Content */}
-                    <div className="p-4 md:p-6">
-                      {selectedTreeHistory.harvest_history.length > 0 ? (
-                        <div>
-                          <div className="mb-4 p-3 md:p-4 bg-green-50 rounded-lg">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                              <p className="text-sm text-green-700">
-                                📊 <strong>เก็บเกี่ยวแล้ว:</strong> {selectedTreeHistory.harvest_history.length} ครั้ง
-                              </p>
-                              <p className="text-sm text-green-700">
-                                🥥 <strong>ทะลายรวม:</strong> {selectedTreeHistory.harvest_history.reduce((sum, record) => sum + (record.bunch_count || 0), 0)} ทะลาย
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* History Table - Mobile Optimized */}
-                          <div className="hidden md:block overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200">
-                              <thead className="bg-gray-50">
-                                <tr>
-                                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    วันที่เก็บเกี่ยว
-                                  </th>
-                                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    จำนวนทะลาย
-                                  </th>
-                                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    หมายเหตุ
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody className="bg-white divide-y divide-gray-200">
-                                {selectedTreeHistory.harvest_history.map((record, index) => (
-                                  <tr key={index} className="hover:bg-gray-50">
-                                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                                      {formatDateThai(record.harvest_date)}
-                                    </td>
-                                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                        {record.bunch_count} ทะลาย
-                                      </span>
-                                    </td>
-                                    <td className="px-4 py-4 text-sm text-gray-900">
-                                      {record.notes || '-'}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-
-                          {/* Mobile Card View */}
-                          <div className="md:hidden space-y-3">
-                            {selectedTreeHistory.harvest_history.map((record, index) => (
-                              <div key={index} className="bg-gray-50 rounded-lg p-4 border">
-                                <div className="flex justify-between items-start mb-2">
-                                  <div className="font-medium text-gray-900">
-                                    {formatDateThai(record.harvest_date)}
-                                  </div>
-                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                    {record.bunch_count} ทะลาย
-                                  </span>
-                                </div>
-                                {record.notes && (
-                                  <div className="text-sm text-gray-600 mt-2">
-                                    <strong>หมายเหตุ:</strong> {record.notes}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-center py-8">
-                          <div className="text-gray-400 text-6xl mb-4">🌱</div>
-                          <p className="text-gray-600">ยังไม่มีประวัติการเก็บเกี่ยวสำหรับต้นนี้</p>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Modal Footer */}
-                    <div className="flex justify-end p-4 md:p-6 border-t bg-gray-50">
-                      <button
-                        onClick={() => setShowTreeModal(false)}
-                        className="w-full md:w-auto px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors font-medium"
-                      >
-                        ปิด
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           );
 
           // Chart creation functions
-          let priceChart = null; // Store chart instance for updates
-          const monthLabels = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
-          
-          const createMonthlyPriceChart = (selectedYear) => {
-            console.log('📊 Creating monthly price per kg chart for year:', selectedYear);
-            
-            const monthlyPricePerKgCtx = document.getElementById('monthlyPricePerKgChart');
-            if (!monthlyPricePerKgCtx) {
-              console.log('❌ monthlyPricePerKgChart element not found');
-              return;
-            }
-            
-            // Destroy existing chart if exists
-            if (priceChart) {
-              console.log('🗑️ Destroying existing price chart');
-              priceChart.destroy();
-              priceChart = null;
-            }
-            
-            // Also check Chart.js registry for any existing chart on this canvas
-            const existingChart = Chart.getChart(monthlyPricePerKgCtx);
-            if (existingChart) {
-              console.log('🗑️ Found existing chart in registry, destroying...');
-              existingChart.destroy();
-            }
-            
-            // Calculate average price per kg for each month of selected year
-            const monthlyPriceData = monthLabels.map((monthLabel, index) => {
-              const monthIndex = index + 1;
-              const monthData = harvestData.filter(item => {
-                const itemDate = new Date(item.date);
-                return itemDate.getFullYear() === selectedYear && itemDate.getMonth() + 1 === monthIndex;
-              });
-              
-              if (monthData.length === 0) return 0;
-              
-              // Calculate weighted average price
-              const totalRevenue = monthData.reduce((sum, item) => sum + parseFloat(item.total_revenue || 0), 0);
-              const totalWeight = monthData.reduce((sum, item) => sum + parseFloat(item.total_weight || 0), 0);
-              
-              return totalWeight > 0 ? totalRevenue / totalWeight : 0;
-            });
-
-            console.log('📊 Creating new price chart instance...');
-            priceChart = new Chart(monthlyPricePerKgCtx, {
-              type: 'line',
-              data: {
-                labels: monthLabels,
-                datasets: [{
-                  label: 'ราคาเฉลี่ยต่อกิโลกรัม (บาท/กก.)',
-                  data: monthlyPriceData,
-                  borderColor: 'rgb(245, 101, 101)',
-                  backgroundColor: 'rgba(245, 101, 101, 0.1)',
-                  tension: 0.4,
-                  fill: true,
-                  pointBackgroundColor: 'rgb(245, 101, 101)',
-                  pointBorderColor: 'rgb(220, 38, 127)',
-                  pointRadius: 5,
-                  pointHoverRadius: 8
-                }]
-              },
-              options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  title: {
-                    display: true,
-                    text: `ราคาเฉลี่ยต่อกิโลกรัมรายเดือน (ปี ${selectedYear + 543})`,
-                    font: { size: 14, weight: 'bold' }
-                  },
-                  legend: { position: 'top' }
-                },
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    title: {
-                      display: true,
-                      text: 'ราคา (บาท/กก.)'
-                    },
-                    ticks: {
-                      callback: function(value) {
-                        return value.toFixed(2) + ' ฿/กก.';
-                      }
-                    }
-                  },
-                  x: {
-                    title: {
-                      display: true,
-                      text: 'เดือน'
-                    }
-                  }
-                },
-                interaction: {
-                  intersect: false,
-                  mode: 'index'
-                },
-                elements: {
-                  point: {
-                    hoverBackgroundColor: 'rgb(220, 38, 127)'
-                  }
-                }
-              }
-            });
-            console.log('✅ Monthly price per kg chart created for year:', selectedYear);
-            console.log('📊 Chart instance stored as:', priceChart);
-          };
-          
-          const updatePriceChart = (selectedYear) => {
-            console.log('📊 Updating price chart for year:', selectedYear);
-            createMonthlyPriceChart(selectedYear);
-          };
-          
-          // Add event listener for price chart updates
-          React.useEffect(() => {
-            const handlePriceChartUpdate = (event) => {
-              if (event.detail && event.detail.year) {
-                updatePriceChart(event.detail.year);
-              }
-            };
-            
-            document.addEventListener('updatePriceChart', handlePriceChartUpdate);
-            
-            return () => {
-              document.removeEventListener('updatePriceChart', handlePriceChartUpdate);
-            };
-          }, [harvestData]); // Re-listen when harvest data changes
-
           const createCharts = () => {
             console.log('📊 createCharts function called');
             console.log('📊 yearlyStats:', yearlyStats);
@@ -3644,8 +3424,7 @@
             const chartIds = [
               'harvestRevenueChart', 'harvestWeightChart', 'fertilizerCostChart', 
               'palmTreeBunchesChart', 'profitVsCostChart', 'monthlyRevenueProfitChart',
-              'monthlyFertilizerCostChart', 'monthlyPalmTreeBunchesChart', 'monthlyHarvestWeightChart',
-              'monthlyPricePerKgChart'
+              'monthlyFertilizerCostChart', 'monthlyPalmTreeBunchesChart', 'monthlyHarvestWeightChart'
             ];
             chartIds.forEach(id => {
               const chart = Chart.getChart(id);
@@ -3666,6 +3445,7 @@
 
             // Get current year for monthly charts
             const currentYear = new Date().getFullYear();
+            const monthLabels = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 
             // ===== MONTHLY CHARTS =====
 
@@ -3967,9 +3747,6 @@
               });
               console.log('✅ Monthly harvest weight chart created');
             }
-
-            // Monthly Price per KG Chart - Initialize for current year
-            createMonthlyPriceChart(currentYear);
 
             // ===== YEARLY CHARTS =====
 
@@ -4275,16 +4052,6 @@
         // Render App
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
-        
-        // Global functions for chart updates
-        window.updatePriceChart = (selectedYear) => {
-          console.log('📊 Global updatePriceChart called for year:', selectedYear);
-          // Find the price chart update function and call it
-          setTimeout(() => {
-            const event = new CustomEvent('updatePriceChart', { detail: { year: selectedYear } });
-            document.dispatchEvent(event);
-          }, 100);
-        };
     </script>
 </body>
 </html>
