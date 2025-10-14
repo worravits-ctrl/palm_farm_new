@@ -2298,12 +2298,30 @@ app.post('/api/admin/db-query', authenticateToken, requireAdmin, (req, res) => {
     });
 });
 
-// Serve database viewer directly
+// Serve database viewer directly with relaxed CSP
 app.get('/db-viewer.html', (req, res) => {
+    res.setHeader('Content-Security-Policy', 
+        "default-src 'self'; " +
+        "style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; " +
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com; " +
+        "script-src-attr 'unsafe-inline'; " +
+        "img-src 'self' data: https:; " +
+        "connect-src 'self' *.up.railway.app https:; " +
+        "font-src 'self' https: data:;"
+    );
     res.sendFile(path.join(__dirname, 'simple-db-viewer.html'));
 });
 
 app.get('/db-viewer', (req, res) => {
+    res.setHeader('Content-Security-Policy', 
+        "default-src 'self'; " +
+        "style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; " +
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com; " +
+        "script-src-attr 'unsafe-inline'; " +
+        "img-src 'self' data: https:; " +
+        "connect-src 'self' *.up.railway.app https:; " +
+        "font-src 'self' https: data:;"
+    );
     res.sendFile(path.join(__dirname, 'simple-db-viewer.html'));
 });
 
