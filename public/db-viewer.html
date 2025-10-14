@@ -92,11 +92,9 @@
         let currentTableData = null;
 
         // ตรวจสอบ API URL
-        const API_BASE = window.location.origin.includes('railway') || window.location.origin.includes('vercel') 
-            ? window.location.origin 
-            : 'http://localhost:3001';
-
-        async function login() {
+        const API_BASE = window.location.hostname === 'localhost' 
+            ? 'http://localhost:3001'
+            : 'https://api-server-production-4ba0.up.railway.app';        async function login() {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
 
@@ -126,7 +124,7 @@
             if (!currentToken) return;
 
             try {
-                const response = await fetch(`${API_BASE}/api/admin/db-viewer`, {
+                const response = await fetch(`${API_BASE}/api/admin/db-tables`, {
                     headers: { 'Authorization': `Bearer ${currentToken}` }
                 });
 
@@ -170,7 +168,7 @@
             const limit = document.getElementById('limitSelect').value;
 
             try {
-                const response = await fetch(`${API_BASE}/api/admin/db-viewer?table=${tableName}&limit=${limit}`, {
+                const response = await fetch(`${API_BASE}/api/admin/db-data/${tableName}?limit=${limit}`, {
                     headers: { 'Authorization': `Bearer ${currentToken}` }
                 });
 
@@ -230,7 +228,7 @@
             if (!currentToken) return;
 
             try {
-                const response = await fetch(`${API_BASE}/api/admin/db-schema`, {
+                const response = await fetch(`${API_BASE}/api/admin/db-schema/users`, {
                     headers: { 'Authorization': `Bearer ${currentToken}` }
                 });
 

@@ -2175,6 +2175,128 @@ app.get('/api/admin/db-schema', authenticateToken, (req, res) => {
     });
 });
 
+// ==== DATABASE VIEWER API (Admin Only) ====
+
+// Get database tables info
+app.get('/api/admin/db-tables', authenticateToken, requireAdmin, (req, res) => {
+    console.log('🗄️ DB Tables request from admin:', req.user.email);
+    
+    // Get all table names
+    db.all(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`, (err, tables) => {
+        if (err) {
+            console.error('Error getting tables:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        
+        // Get count for each table
+        const tablePromises = tables.map(table => {
+            return new Promise((resolve, reject) => {
+                db.get(`SELECT COUNT(*) as count FROM ${table.name}`, (err, result) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve({
+                            name: table.name,
+                            count: result.count
+                        });
+                    }
+                });
+            });
+        });
+        
+        Promise.all(tablePromises)
+            .then(tablesWithCounts => {
+                res.json({
+                    message: 'Database tables',
+                    tables: tablesWithCounts
+                });
+            })
+            .catch(err => {
+                console.error('Error counting table rows:', err);
+                res.status(500).json({ error: 'Database error' });
+            });
+    });
+});
+
+// Get table data
+app.get('/api/admin/db-data/:table', authenticateToken, requireAdmin, (req, res) => {
+    const { table } = req.params;
+    const limit = req.query.limit || 100;
+    const offset = req.query.offset || 0;
+    
+    console.log(`🗄️ DB Data request for table: ${table}, limit: ${limit}, offset: ${offset}`);
+    
+    // Validate table name to prevent SQL injection
+    const allowedTables = ['users', 'harvest_data', 'fertilizer_data', 'palm_tree_data', 'notes_data'];
+    if (!allowedTables.includes(table)) {
+        return res.status(400).json({ error: 'Invalid table name' });
+    }
+    
+    db.all(`SELECT * FROM ${table} ORDER BY id DESC LIMIT ? OFFSET ?`, [limit, offset], (err, rows) => {
+        if (err) {
+            console.error(`Error getting data from ${table}:`, err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        
+        res.json({
+            message: `Data from ${table}`,
+            table: table,
+            data: rows,
+            count: rows.length
+        });
+    });
+});
+
+// Get table schema
+app.get('/api/admin/db-schema/:table', authenticateToken, requireAdmin, (req, res) => {
+    const { table } = req.params;
+    
+    console.log(`🗄️ DB Schema request for table: ${table}`);
+    
+    db.all(`PRAGMA table_info(${table})`, (err, columns) => {
+        if (err) {
+            console.error(`Error getting schema for ${table}:`, err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        
+        res.json({
+            message: `Schema for ${table}`,
+            table: table,
+            columns: columns
+        });
+    });
+});
+
+// Execute custom SQL query (Admin only, read-only)
+app.post('/api/admin/db-query', authenticateToken, requireAdmin, (req, res) => {
+    const { query } = req.body;
+    
+    console.log(`🗄️ Custom query from admin: ${req.user.email}`);
+    console.log(`Query: ${query}`);
+    
+    // Only allow SELECT queries for safety
+    if (!query.trim().toLowerCase().startsWith('select')) {
+        return res.status(400).json({ error: 'Only SELECT queries are allowed' });
+    }
+    
+    db.all(query, (err, rows) => {
+        if (err) {
+            console.error('Query execution error:', err);
+            return res.status(500).json({ 
+                error: 'Query execution error',
+                details: err.message 
+            });
+        }
+        
+        res.json({
+            message: 'Query executed successfully',
+            query: query,
+            data: rows,
+            count: rows.length
+        });
+    });
+});
+
 // Start server
 app.listen(PORT, () => {
     console.log(`🚀 Palm Oil API Server running on http://localhost:${PORT}`);
