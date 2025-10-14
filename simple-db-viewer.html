@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🗄️ Database Viewer - Palm Oil Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <!-- Header -->
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-3xl font-bold text-gray-800">🗄️ Database Viewer</h1>
+                <a href="/" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
+                    ← กลับหน้าหลัก
+                </a>
+            </div>
+
+            <!-- Login Form -->
+            <div id="loginForm" class="mb-6">
+                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                    <p class="text-sm text-yellow-800">
+                        🔐 กรุณาเข้าสู่ระบบด้วยบัญชี Admin เพื่อดูข้อมูลฐานข้อมูล
+                    </p>
+                </div>
+                <div class="flex space-x-4">
+                    <input type="email" id="email" placeholder="Email" value="admin@palmoil.com" 
+                           class="border rounded px-3 py-2 flex-1">
+                    <input type="password" id="password" placeholder="Password" value="admin"
+                           class="border rounded px-3 py-2 flex-1">
+                    <button onclick="login()" class="bg-indigo-500 text-white px-6 py-2 rounded hover:bg-indigo-600">
+                        เข้าสู่ระบบ
+                    </button>
+                </div>
+                <div id="loginError" class="text-red-600 text-sm mt-2 hidden"></div>
+            </div>
+
+            <!-- Database Tables -->
+            <div id="tablesSection" class="hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold">📊 ตารางฐานข้อมูล</h2>
+                    <button onclick="loadTables()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                        🔄 Refresh
+                    </button>
+                </div>
+                <div id="tablesList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8"></div>
+                
+                <!-- Table Data -->
+                <div id="tableData" class="hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 id="tableTitle" class="text-xl font-semibold">📋 ข้อมูลตาราง</h3>
+                        <button onclick="exportData()" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
+                            📤 Export JSON
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <div id="tableContent"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://api-server-production-4ba0.up.railway.app';
+        let currentToken = null;
+        let currentTableData = null;
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('loginError');
+
+            try {
+                const response = await fetch(`${API_BASE}/api/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    currentToken = result.token;
+                    document.getElementById('loginForm').style.display = 'none';
+                    document.getElementById('tablesSection').classList.remove('hidden');
+                    loadTables();
+                } else {
+                    errorDiv.textContent = result.error || 'Login failed';
+                    errorDiv.classList.remove('hidden');
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Connection error: ' + error.message;
+                errorDiv.classList.remove('hidden');
+            }
+        }
+
+        async function loadTables() {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/db-tables`, {
+                    headers: { 'Authorization': `Bearer ${currentToken}` }
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    displayTables(result.tables);
+                } else {
+                    alert('Error loading tables: ' + result.error);
+                }
+            } catch (error) {
+                alert('Connection error: ' + error.message);
+            }
+        }
+
+        function displayTables(tables) {
+            const container = document.getElementById('tablesList');
+            container.innerHTML = '';
+
+            tables.forEach(table => {
+                const card = document.createElement('div');
+                card.className = 'bg-white border rounded-lg p-4 hover:shadow-lg cursor-pointer transition';
+                card.onclick = () => loadTableData(table.name);
+                
+                card.innerHTML = `
+                    <h3 class="font-semibold text-lg mb-2">${table.name}</h3>
+                    <p class="text-gray-600">${table.count} รายการ</p>
+                    <div class="mt-2 text-sm text-blue-600">คลิกเพื่อดูข้อมูล →</div>
+                `;
+                
+                container.appendChild(card);
+            });
+        }
+
+        async function loadTableData(tableName) {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/db-data/${tableName}?limit=100`, {
+                    headers: { 'Authorization': `Bearer ${currentToken}` }
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    currentTableData = result.data;
+                    displayTableData(result.data, tableName);
+                    document.getElementById('tableTitle').textContent = `📋 ข้อมูลตาราง: ${tableName}`;
+                    document.getElementById('tableData').classList.remove('hidden');
+                } else {
+                    alert('Error loading table data: ' + result.error);
+                }
+            } catch (error) {
+                alert('Connection error: ' + error.message);
+            }
+        }
+
+        function displayTableData(data, tableName) {
+            const container = document.getElementById('tableContent');
+            
+            if (data.length === 0) {
+                container.innerHTML = '<p class="text-gray-500">ไม่มีข้อมูลในตาราง</p>';
+                return;
+            }
+
+            const columns = Object.keys(data[0]);
+            
+            let html = `
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            ${columns.map(col => `<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">${col}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+            `;
+
+            data.slice(0, 50).forEach(row => {
+                html += '<tr>';
+                columns.forEach(col => {
+                    let value = row[col];
+                    if (value === null) value = 'NULL';
+                    if (typeof value === 'string' && value.length > 50) {
+                        value = value.substring(0, 50) + '...';
+                    }
+                    html += `<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${value}</td>`;
+                });
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            
+            if (data.length > 50) {
+                html += `<p class="text-sm text-gray-500 mt-4">แสดง 50 รายการแรกจากทั้งหมด ${data.length} รายการ</p>`;
+            }
+
+            container.innerHTML = html;
+        }
+
+        function exportData() {
+            if (!currentTableData) {
+                alert('ไม่มีข้อมูลให้ export');
+                return;
+            }
+
+            const dataStr = JSON.stringify(currentTableData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(dataBlob);
+            link.download = `database_export_${Date.now()}.json`;
+            link.click();
+        }
+
+        // Auto-login if credentials are filled
+        window.onload = function() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            if (email && password) {
+                // Optional: auto-login after 2 seconds
+                // setTimeout(login, 2000);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -2299,7 +2299,11 @@ app.post('/api/admin/db-query', authenticateToken, requireAdmin, (req, res) => {
 
 // Serve database viewer directly
 app.get('/db-viewer.html', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'db-viewer.html'));
+    res.sendFile(path.join(__dirname, 'simple-db-viewer.html'));
+});
+
+app.get('/db-viewer', (req, res) => {
+    res.sendFile(path.join(__dirname, 'simple-db-viewer.html'));
 });
 
 // Serve main palm oil app
