@@ -90,10 +90,11 @@
         // API Configuration - Environment-aware
         const API_BASE_URL = window.location.hostname === 'localhost' 
             ? 'http://localhost:3001/api'
-            : `${window.location.protocol}//${window.location.host}/api`;
+            : 'https://api-server-production-4ba0.up.railway.app/api';
         
         console.log('🔧 API_BASE_URL configured as:', API_BASE_URL);
         console.log('🔧 Current hostname:', window.location.hostname);
+        console.log('🔧 Using Railway API for production');
         
         // API Helper Functions
         const api = {

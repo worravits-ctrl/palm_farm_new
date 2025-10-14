@@ -1,0 +1,5 @@
+[build]
+
+[deploy]
+startCommand = "npm start"
+restartPolicyType = "always"
