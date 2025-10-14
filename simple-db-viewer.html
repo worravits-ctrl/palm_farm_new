@@ -29,7 +29,7 @@
                            class="border rounded px-3 py-2 flex-1">
                     <input type="password" id="password" placeholder="Password" value="admin"
                            class="border rounded px-3 py-2 flex-1">
-                    <button onclick="login()" class="bg-indigo-500 text-white px-6 py-2 rounded hover:bg-indigo-600">
+                    <button id="loginBtn" class="bg-indigo-500 text-white px-6 py-2 rounded hover:bg-indigo-600">
                         เข้าสู่ระบบ
                     </button>
                 </div>
@@ -40,7 +40,7 @@
             <div id="tablesSection" class="hidden">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-xl font-semibold">📊 ตารางฐานข้อมูล</h2>
-                    <button onclick="loadTables()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                    <button id="refreshBtn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
                         🔄 Refresh
                     </button>
                 </div>
@@ -50,7 +50,7 @@
                 <div id="tableData" class="hidden">
                     <div class="flex justify-between items-center mb-4">
                         <h3 id="tableTitle" class="text-xl font-semibold">📋 ข้อมูลตาราง</h3>
-                        <button onclick="exportData()" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
+                        <button id="exportBtn" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
                             📤 Export JSON
                         </button>
                     </div>
@@ -123,7 +123,7 @@
             tables.forEach(table => {
                 const card = document.createElement('div');
                 card.className = 'bg-white border rounded-lg p-4 hover:shadow-lg cursor-pointer transition';
-                card.onclick = () => loadTableData(table.name);
+                card.addEventListener('click', () => loadTableData(table.name));
                 
                 card.innerHTML = `
                     <h3 class="font-semibold text-lg mb-2">${table.name}</h3>
@@ -213,8 +213,20 @@
             link.click();
         }
 
-        // Auto-login if credentials are filled
+        // Setup event listeners when page loads
         window.onload = function() {
+            // Setup button event listeners
+            document.getElementById('loginBtn').addEventListener('click', login);
+            document.getElementById('refreshBtn').addEventListener('click', loadTables);
+            document.getElementById('exportBtn').addEventListener('click', exportData);
+            
+            // Allow Enter key to login
+            document.getElementById('password').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    login();
+                }
+            });
+            
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             if (email && password) {

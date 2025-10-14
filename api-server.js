@@ -105,6 +105,7 @@ app.use(helmet({
                 "https://unpkg.com/chart.js@4.4.0/dist/chart.umd.js",
                 "https://cdn.tailwindcss.com"
             ],
+            scriptSrcAttr: ["'unsafe-inline'"], // Allow inline event handlers
             imgSrc: ["'self'", "data:", "https:"],
             connectSrc: ["'self'", "*.up.railway.app", "https://unpkg.com"], // Production support for Railway
             fontSrc: ["'self'", "https:", "data:"],
