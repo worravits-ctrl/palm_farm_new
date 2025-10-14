@@ -2297,15 +2297,142 @@ app.post('/api/admin/db-query', authenticateToken, requireAdmin, (req, res) => {
     });
 });
 
+// Serve database viewer directly
+app.get('/db-viewer.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'db-viewer.html'));
+});
+
+// Serve main palm oil app
+app.get('/app', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'palm-oil-database-app.html'));
+});
+
+// Root path - show menu
+app.get('/', (req, res) => {
+    res.send(`
+        <!DOCTYPE html>
+        <html lang="th">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>🌴 ระบบจัดการธุรกิจน้ำมันปาล์ม</title>
+            <script src="https://cdn.tailwindcss.com"></script>
+        </head>
+        <body class="bg-gradient-to-br from-green-50 to-blue-50 min-h-screen">
+            <div class="container mx-auto px-4 py-16">
+                <div class="max-w-4xl mx-auto">
+                    <div class="text-center mb-12">
+                        <h1 class="text-4xl font-bold text-gray-800 mb-4">🌴 ระบบจัดการธุรกิจน้ำมันปาล์ม</h1>
+                        <p class="text-xl text-gray-600">Palm Oil Management System on Railway Cloud</p>
+                        <div class="mt-4 inline-flex items-center px-4 py-2 bg-green-100 text-green-800 rounded-full">
+                            <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                            ออนไลน์และพร้อมใช้งาน
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <!-- Main Application -->
+                        <div class="bg-white p-8 rounded-xl shadow-lg border-l-4 border-blue-500">
+                            <h2 class="text-2xl font-semibold text-gray-800 mb-4">🏠 แอปพลิเคชันหลัก</h2>
+                            <p class="text-gray-600 mb-6">
+                                ระบบจัดการข้อมูลการเก็บเกี่ยว ปุ๋ย ต้นปาล์ม และรายงานแบบครบวงจร
+                            </p>
+                            <div class="space-y-3 mb-6">
+                                <div class="flex items-center text-sm text-gray-600">
+                                    <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                                    การจัดการข้อมูลการเก็บเกี่ยว
+                                </div>
+                                <div class="flex items-center text-sm text-gray-600">
+                                    <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                                    ติดตามการใส่ปุ๋ยและต้นทุน
+                                </div>
+                                <div class="flex items-center text-sm text-gray-600">
+                                    <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                                    รายงานและกราฟแสดงผล
+                                </div>
+                            </div>
+                            <a href="/app" 
+                               class="inline-block w-full text-center bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg transition duration-200">
+                                เข้าใช้งานระบบ
+                            </a>
+                        </div>
+
+                        <!-- Database Viewer -->
+                        <div class="bg-white p-8 rounded-xl shadow-lg border-l-4 border-purple-500">
+                            <h2 class="text-2xl font-semibold text-gray-800 mb-4">🗄️ ดูฐานข้อมูล</h2>
+                            <p class="text-gray-600 mb-6">
+                                เข้าถึงและดูข้อมูลฐานข้อมูลโดยตรง สำหรับผู้ดูแลระบบ
+                            </p>
+                            <div class="space-y-3 mb-6">
+                                <div class="flex items-center text-sm text-gray-600">
+                                    <span class="w-2 h-2 bg-purple-500 rounded-full mr-2"></span>
+                                    ดูตารางและข้อมูลทั้งหมด
+                                </div>
+                                <div class="flex items-center text-sm text-gray-600">
+                                    <span class="w-2 h-2 bg-purple-500 rounded-full mr-2"></span>
+                                    Export ข้อมูลเป็น JSON
+                                </div>
+                                <div class="flex items-center text-sm text-gray-600">
+                                    <span class="w-2 h-2 bg-purple-500 rounded-full mr-2"></span>
+                                    เฉพาะ Admin เท่านั้น
+                                </div>
+                            </div>
+                            <a href="/db-viewer.html" 
+                               class="inline-block w-full text-center bg-purple-500 hover:bg-purple-600 text-white font-semibold py-3 px-6 rounded-lg transition duration-200">
+                                เข้าดูฐานข้อมูล
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- API Documentation -->
+                    <div class="mt-12 bg-white p-8 rounded-xl shadow-lg">
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">🔧 API Information</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div>
+                                <h3 class="font-semibold text-gray-700 mb-2">Health Check</h3>
+                                <code class="text-sm text-gray-600">GET /api/health</code>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-gray-700 mb-2">Authentication</h3>
+                                <code class="text-sm text-gray-600">POST /api/auth/login</code>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-gray-700 mb-2">Data APIs</h3>
+                                <code class="text-sm text-gray-600">GET /api/harvest</code>
+                            </div>
+                        </div>
+                        <div class="mt-6 p-4 bg-gray-50 rounded-lg">
+                            <p class="text-sm text-gray-600">
+                                <strong>Admin Login:</strong> admin@palmoil.com / admin
+                                <br>
+                                <strong>Base URL:</strong> https://api-server-production-4ba0.up.railway.app
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Footer -->
+                    <div class="text-center mt-12 text-gray-500">
+                        <p>🚀 Powered by Railway Cloud Platform</p>
+                        <p class="text-sm">Build: ${new Date().toISOString()}</p>
+                    </div>
+                </div>
+            </div>
+        </body>
+        </html>
+    `);
+});
+
+// Static files (serve public directory and frontend build)
+app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'frontend', 'dist')));
+
 // Start server
 app.listen(PORT, () => {
     console.log(`🚀 Palm Oil API Server running on http://localhost:${PORT}`);
     console.log(`📊 Database: ${dbPath}`);
     console.log(`🔑 JWT Secret: ${JWT_SECRET.substring(0, 10)}...`);
+    console.log(`📁 Serving static files from: public/ and frontend/dist/`);
 });
-
-// Static files (serve frontend build)
-app.use(express.static(path.join(__dirname, 'frontend', 'dist')));
 
 // Serve main app for any non-API routes (catch-all for SPA routing)
 app.get('*', (req, res) => {
