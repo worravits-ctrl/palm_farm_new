@@ -850,12 +850,23 @@
               return;
             }
             
+            // Enhanced CSV export to handle long text with quotes, commas, and newlines
+            const escapeCsvValue = (value) => {
+              if (!value) return '""';
+              const str = String(value);
+              // Escape quotes and wrap in quotes if contains comma, quote, or newline
+              if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
+                return `"${str.replace(/"/g, '""')}"`;
+              }
+              return `"${str}"`;
+            };
+            
             const csvContent = [
-              headers.join(','),
+              headers.map(h => `"${h}"`).join(','), // Quote headers too
               ...data.map(row => 
                 headers.map(header => {
                   const value = row[header] || '';
-                  return `"${String(value).replace(/"/g, '""')}"`;
+                  return escapeCsvValue(value);
                 }).join(',')
               )
             ].join('\n');
@@ -880,13 +891,47 @@
               try {
                 console.log(`📁 Starting CSV import for ${endpoint}`);
                 const csv = e.target.result;
-                const lines = csv.split('\n');
-                const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
+                
+                // Enhanced CSV parsing to handle commas and quotes in content
+                const parseCSVLine = (line) => {
+                  const result = [];
+                  let current = '';
+                  let inQuotes = false;
+                  
+                  for (let i = 0; i < line.length; i++) {
+                    const char = line[i];
+                    
+                    if (char === '"') {
+                      if (inQuotes && line[i + 1] === '"') {
+                        // Escaped quote
+                        current += '"';
+                        i++; // Skip next quote
+                      } else {
+                        // Toggle quote state
+                        inQuotes = !inQuotes;
+                      }
+                    } else if (char === ',' && !inQuotes) {
+                      // Field separator outside quotes
+                      result.push(current.trim());
+                      current = '';
+                    } else {
+                      current += char;
+                    }
+                  }
+                  
+                  // Add last field
+                  result.push(current.trim());
+                  return result;
+                };
+                
+                const lines = csv.split('\n').filter(line => line.trim());
+                const headers = parseCSVLine(lines[0]).map(h => h.replace(/^"|"$/g, '').trim());
+                
+                console.log('📋 CSV Headers:', headers);
                 
                 const data = lines.slice(1)
-                  .filter(line => line.trim())
                   .map(line => {
-                    const values = line.split(',').map(v => v.replace(/"/g, '').trim());
+                    const values = parseCSVLine(line).map(v => v.replace(/^"|"$/g, '').trim());
                     const obj = {};
                     headers.forEach((header, index) => {
                       obj[header] = values[index] || '';
@@ -895,6 +940,15 @@
                   });
                 
                 console.log(`📊 Parsed ${data.length} records from CSV`);
+                
+                // Debug: Show sample data for notes import
+                if (endpoint === '/notes' && data.length > 0) {
+                  console.log('🔍 Sample Notes record:', {
+                    title: data[0].title,
+                    contentLength: data[0].content ? data[0].content.length : 0,
+                    contentPreview: data[0].content ? data[0].content.substring(0, 100) + '...' : 'No content'
+                  });
+                }
                 
                 // Use bulk import endpoint
                 const bulkEndpoint = `${endpoint}/bulk`;
