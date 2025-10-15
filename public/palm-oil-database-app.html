@@ -852,24 +852,36 @@
             
             // Enhanced CSV export to handle long text with quotes, commas, and newlines
             const escapeCsvValue = (value) => {
-              if (!value) return '""';
+              if (!value && value !== 0) return '""';
               const str = String(value);
-              // Escape quotes and wrap in quotes if contains comma, quote, or newline
-              if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
-                return `"${str.replace(/"/g, '""')}"`;
-              }
-              return `"${str}"`;
+              
+              // Always wrap in quotes for consistent CSV format, especially for long text
+              // Replace internal quotes with double quotes (CSV standard)
+              const escaped = str.replace(/"/g, '""');
+              return `"${escaped}"`;
             };
             
             const csvContent = [
               headers.map(h => `"${h}"`).join(','), // Quote headers too
-              ...data.map(row => 
-                headers.map(header => {
+              ...data.map((row, index) => {
+                const csvRow = headers.map(header => {
                   const value = row[header] || '';
-                  return escapeCsvValue(value);
-                }).join(',')
-              )
-            ].join('\n');
+                  const escaped = escapeCsvValue(value);
+                  
+                  // Debug log for content field
+                  if (header === 'content' && index === 0) {
+                    console.log('🔍 CSV Export Debug - First content field:');
+                    console.log('Original length:', value.length);
+                    console.log('Original preview:', value.substring(0, 100) + '...');
+                    console.log('Escaped length:', escaped.length);
+                    console.log('Has newlines:', value.includes('\n'));
+                  }
+                  
+                  return escaped;
+                }).join(',');
+                return csvRow;
+              })
+            ].join('\r\n'); // Use \r\n for proper CSV line endings
             
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
@@ -924,7 +936,8 @@
                   return result;
                 };
                 
-                const lines = csv.split('\n').filter(line => line.trim());
+                // Split by both \r\n and \n to handle different line endings
+                const lines = csv.split(/\r?\n/).filter(line => line.trim());
                 const headers = parseCSVLine(lines[0]).map(h => h.replace(/^"|"$/g, '').trim());
                 
                 console.log('📋 CSV Headers:', headers);
