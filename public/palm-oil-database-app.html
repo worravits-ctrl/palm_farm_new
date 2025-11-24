@@ -3139,7 +3139,15 @@
 
                     {/* Monthly Charts Section */}
                     <div className="bg-white p-6 rounded-xl shadow-lg">
-                      <h3 className="text-xl font-semibold text-gray-800 mb-6">📈 กราฟแสดงข้อมูลรายเดือน (ปีปัจจุบัน)</h3>
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
+                          <h3 className="text-xl font-semibold text-gray-800">📈 กราฟแสดงข้อมูลรายเดือน</h3>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-600">เลือกปี:</span>
+                            <select id="monthlyChartsYearSelect" className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                              {/* ปีที่มีข้อมูลในระบบ */}
+                            </select>
+                          </div>
+                        </div>
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                         
                         {/* Monthly Revenue and Profit Chart */}
@@ -3164,21 +3172,7 @@
 
                         {/* Monthly Price per KG Chart */}
                         <div className="space-y-4">
-                          <div className="flex items-center gap-4">
-                            <h4 className="text-lg font-medium text-gray-700">📊 ราคาเฉลี่ยต่อกิโลกรัมรายเดือน</h4>
-                            <select 
-                              id="priceChartYearSelect"
-                              className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              onChange={(e) => window.updatePriceChart && window.updatePriceChart(parseInt(e.target.value))}
-                            >
-                              <option value="2025">ปี 2025 (2568)</option>
-                              <option value="2024">ปี 2024 (2567)</option>
-                              <option value="2023">ปี 2023 (2566)</option>
-                              <option value="2022">ปี 2022 (2565)</option>
-                              <option value="2021">ปี 2021 (2564)</option>
-                              <option value="2020">ปี 2020 (2563)</option>
-                            </select>
-                          </div>
+                          <h4 className="text-lg font-medium text-gray-700">📊 ราคาเฉลี่ยต่อกิโลกรัมรายเดือน</h4>
                           <div className="h-80">
                             <canvas id="monthlyPricePerKgChart"></canvas>
                           </div>
@@ -3780,26 +3774,40 @@
 
             console.log('📊 Years found:', years);
 
-            // Get current year for monthly charts
-            const currentYear = new Date().getFullYear();
+            // Monthly charts: year selection
+            let selectedMonthlyYear = new Date().getFullYear();
+            const monthlyYearSelect = document.getElementById('monthlyChartsYearSelect');
+            // สร้าง options ปี
+            if (monthlyYearSelect) {
+              monthlyYearSelect.innerHTML = years.map(y => `<option value="${y}">${y} (${y+543})</option>`).reverse().join('');
+              selectedMonthlyYear = parseInt(monthlyYearSelect.value);
+              monthlyYearSelect.onchange = function() {
+                selectedMonthlyYear = parseInt(this.value);
+                renderMonthlyCharts();
+              };
+            }
 
-            // ===== MONTHLY CHARTS =====
+            function renderMonthlyCharts() {
+
+
+            // ===== MONTHLY CHARTS (with year selection) =====
+            // Destroy existing monthly charts before re-render
+            ['monthlyRevenueProfitChart','monthlyFertilizerCostChart','monthlyPalmTreeBunchesChart','monthlyHarvestWeightChart','monthlyPricePerKgChart'].forEach(id => {
+              const chart = Chart.getChart(id);
+              if (chart) chart.destroy();
+            });
 
             // Monthly Revenue and Profit Chart
             const monthlyRevenueProfitCtx = document.getElementById('monthlyRevenueProfitChart');
             if (monthlyRevenueProfitCtx) {
-              console.log('📊 Creating monthly revenue and profit chart...');
-              
               let monthlyRevenue = Array(12).fill(0);
               let monthlyProfit = Array(12).fill(0);
-              
               if (Array.isArray(harvestData)) {
                 harvestData.forEach(item => {
                   if (item.date) {
                     let d;
                     const isoDateRegex = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
                     const thDateRegex = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/;
-                    
                     if (isoDateRegex.test(item.date)) {
                       const match = item.date.match(isoDateRegex);
                       d = new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
@@ -3811,8 +3819,7 @@
                     } else {
                       d = new Date(item.date);
                     }
-                    
-                    if (d && d.getFullYear() === currentYear) {
+                    if (d && d.getFullYear() === selectedMonthlyYear) {
                       const monthIdx = d.getMonth();
                       monthlyRevenue[monthIdx] += parseFloat(item.total_revenue) || 0;
                       monthlyProfit[monthIdx] += parseFloat(item.net_profit) || 0;
@@ -3820,10 +3827,6 @@
                   }
                 });
               }
-              
-              console.log('📊 Monthly revenue:', monthlyRevenue);
-              console.log('📊 Monthly profit:', monthlyProfit);
-              
               new Chart(monthlyRevenueProfitCtx, {
                 type: 'line',
                 data: {
@@ -3867,23 +3870,18 @@
                   }
                 }
               });
-              console.log('✅ Monthly revenue and profit chart created');
             }
 
             // Monthly Fertilizer Cost Chart
             const monthlyFertilizerCostCtx = document.getElementById('monthlyFertilizerCostChart');
             if (monthlyFertilizerCostCtx) {
-              console.log('📊 Creating monthly fertilizer cost chart...');
-              
               let monthlyFertilizerCost = Array(12).fill(0);
-              
               if (Array.isArray(fertilizerData)) {
                 fertilizerData.forEach(item => {
                   if (item.date) {
                     let d;
                     const isoDateRegex = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
                     const thDateRegex = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/;
-                    
                     if (isoDateRegex.test(item.date)) {
                       const match = item.date.match(isoDateRegex);
                       d = new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
@@ -3895,17 +3893,13 @@
                     } else {
                       d = new Date(item.date);
                     }
-                    
-                    if (d && d.getFullYear() === currentYear) {
+                    if (d && d.getFullYear() === selectedMonthlyYear) {
                       const monthIdx = d.getMonth();
                       monthlyFertilizerCost[monthIdx] += parseFloat(item.total_cost) || 0;
                     }
                   }
                 });
               }
-              
-              console.log('📊 Monthly fertilizer cost:', monthlyFertilizerCost);
-              
               new Chart(monthlyFertilizerCostCtx, {
                 type: 'bar',
                 data: {
@@ -3938,23 +3932,18 @@
                   }
                 }
               });
-              console.log('✅ Monthly fertilizer cost chart created');
             }
 
             // Monthly Palm Tree Bunches Chart
             const monthlyPalmTreeBunchesCtx = document.getElementById('monthlyPalmTreeBunchesChart');
             if (monthlyPalmTreeBunchesCtx) {
-              console.log('📊 Creating monthly palm tree bunches chart...');
-              
               let monthlyBunches = Array(12).fill(0);
-              
               if (Array.isArray(palmTreeData)) {
                 palmTreeData.forEach(item => {
                   if (item.harvest_date) {
                     let d;
                     const isoDateRegex = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
                     const thDateRegex = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/;
-                    
                     if (isoDateRegex.test(item.harvest_date)) {
                       const match = item.harvest_date.match(isoDateRegex);
                       d = new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
@@ -3966,17 +3955,13 @@
                     } else {
                       d = new Date(item.harvest_date);
                     }
-                    
-                    if (d && d.getFullYear() === currentYear) {
+                    if (d && d.getFullYear() === selectedMonthlyYear) {
                       const monthIdx = d.getMonth();
                       monthlyBunches[monthIdx] += parseInt(item.bunch_count) || 0;
                     }
                   }
                 });
               }
-              
-              console.log('📊 Monthly bunches:', monthlyBunches);
-              
               new Chart(monthlyPalmTreeBunchesCtx, {
                 type: 'bar',
                 data: {
@@ -4009,23 +3994,18 @@
                   }
                 }
               });
-              console.log('✅ Monthly palm tree bunches chart created');
             }
 
             // Monthly Harvest Weight Chart
             const monthlyHarvestWeightCtx = document.getElementById('monthlyHarvestWeightChart');
             if (monthlyHarvestWeightCtx) {
-              console.log('📊 Creating monthly harvest weight chart...');
-              
               let monthlyWeight = Array(12).fill(0);
-              
               if (Array.isArray(harvestData)) {
                 harvestData.forEach(item => {
                   if (item.date) {
                     let d;
                     const isoDateRegex = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
                     const thDateRegex = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/;
-                    
                     if (isoDateRegex.test(item.date)) {
                       const match = item.date.match(isoDateRegex);
                       d = new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
@@ -4037,17 +4017,13 @@
                     } else {
                       d = new Date(item.date);
                     }
-                    
-                    if (d && d.getFullYear() === currentYear) {
+                    if (d && d.getFullYear() === selectedMonthlyYear) {
                       const monthIdx = d.getMonth();
                       monthlyWeight[monthIdx] += parseFloat(item.total_weight) || 0;
                     }
                   }
                 });
               }
-              
-              console.log('📊 Monthly weight:', monthlyWeight);
-              
               new Chart(monthlyHarvestWeightCtx, {
                 type: 'line',
                 data: {
@@ -4081,15 +4057,85 @@
                   }
                 }
               });
-              console.log('✅ Monthly harvest weight chart created');
             }
+              // Monthly Price per KG Chart (linked to selectedMonthlyYear)
+              const monthlyPricePerKgCtx = document.getElementById('monthlyPricePerKgChart');
+              if (monthlyPricePerKgCtx) {
+                const monthlyPriceData = monthLabels.map((monthLabel, index) => {
+                  const monthIndex = index + 1;
+                  const monthData = harvestData.filter(item => {
+                    if (!item.date) return false;
+                    let d;
+                    const isoDateRegex = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
+                    const thDateRegex = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/;
+                    if (isoDateRegex.test(item.date)) {
+                      const match = item.date.match(isoDateRegex);
+                      d = new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
+                    } else if (thDateRegex.test(item.date)) {
+                      const match = item.date.match(thDateRegex);
+                      let year = parseInt(match[3]);
+                      if (year > 2400) year -= 543;
+                      d = new Date(year, parseInt(match[2]) - 1, parseInt(match[1]));
+                    } else {
+                      d = new Date(item.date);
+                    }
+                    return d && d.getFullYear() === selectedMonthlyYear && d.getMonth() + 1 === monthIndex;
+                  });
+                  
+                  if (monthData.length === 0) return 0;
+                  const totalRevenue = monthData.reduce((sum, item) => sum + parseFloat(item.total_revenue || 0), 0);
+                  const totalWeight = monthData.reduce((sum, item) => sum + parseFloat(item.total_weight || 0), 0);
+                  return totalWeight > 0 ? totalRevenue / totalWeight : 0;
+                });
 
-            // Monthly Price per KG Chart - Initialize for current year
-            createMonthlyPriceChart(currentYear);
-
-            // ===== YEARLY CHARTS =====
-
-            if (years.length === 0) {
+                new Chart(monthlyPricePerKgCtx, {
+                  type: 'line',
+                  data: {
+                    labels: monthLabels,
+                    datasets: [{
+                      label: 'ราคาเฉลี่ยต่อกิโลกรัม (บาท/กก.)',
+                      data: monthlyPriceData,
+                      borderColor: 'rgb(245, 101, 101)',
+                      backgroundColor: 'rgba(245, 101, 101, 0.1)',
+                      tension: 0.4,
+                      fill: true,
+                      pointBackgroundColor: 'rgb(245, 101, 101)',
+                      pointBorderColor: 'rgb(220, 38, 127)',
+                      pointRadius: 5,
+                      pointHoverRadius: 8
+                    }]
+                  },
+                  options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      title: {
+                        display: true,
+                        text: `ราคาเฉลี่ยต่อกิโลกรัมรายเดือน (ปี ${selectedMonthlyYear + 543})`,
+                        font: { size: 14, weight: 'bold' }
+                      },
+                      legend: { position: 'top' }
+                    },
+                    scales: {
+                      y: {
+                        beginAtZero: true,
+                        title: {
+                          display: true,
+                          text: 'ราคา (บาท/กก.)'
+                        },
+                        ticks: {
+                          callback: function(value) {
+                            return value.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ฿/กก.';
+                          }
+                        }
+                      }
+                    }
+                  }
+                });
+            }
+          }
+          // Initial render
+          renderMonthlyCharts();            if (years.length === 0) {
               console.log('📊 No data years available for yearly charts');
               return;
             }
