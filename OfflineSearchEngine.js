@@ -166,12 +166,12 @@ class OfflineSearchEngine {
                     SUM(fallen_weight) as total_fallen_weight,
                     SUM(fallen_weight * fallen_price_per_kg) as fallen_revenue
                 FROM harvest_data 
-                WHERE date BETWEEN ? AND ?
+                WHERE user_id = ? AND date BETWEEN ? AND ?
             `;
 
-            this.db.get(query, [dateFrom, dateTo], (err, row) => {
+            this.db.get(query, [userId, dateFrom, dateTo], (err, row) => {
                 if (err) reject(err);
-                else resolve(row);
+                else resolve(row || {total_harvests: 0, total_weight: 0, total_revenue: 0, total_cost: 0, total_profit: 0, avg_price: 0});
             });
         });
     }
@@ -323,14 +323,59 @@ class OfflineSearchEngine {
             return `วันนี้คือวัน${thaiDate}`;
         }
 
-        // กำไรสุทธิ
+        // กำไรสุทธิเดือนนี้
+        if (questionLower.includes('กำไรสุทธิ') && questionLower.includes('เดือนนี้')) {
+            const currentDate = new Date();
+            const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+            const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+            
+            const stats = await this.getHarvestStats(userId,
+                firstDay.toISOString().split('T')[0],
+                lastDay.toISOString().split('T')[0]
+            );
+            
+            const monthName = currentDate.toLocaleDateString('th-TH', {month: 'long'});
+            return `กำไรสุทธิเดือนนี้ (${monthName}): ${(stats.total_profit || 0).toLocaleString()} บาท (รายได้ ${(stats.total_revenue || 0).toLocaleString()} - ค่าใช้จ่าย ${(stats.total_cost || 0).toLocaleString()})`;
+        }
+
+        // กำไรสุทธิเดือนที่แล้ว
+        if (questionLower.includes('กำไรสุทธิ') && questionLower.includes('เดือนที่แล้ว')) {
+            const currentDate = new Date();
+            const lastMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+            const lastMonthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), 0);
+            
+            const stats = await this.getHarvestStats(userId,
+                lastMonth.toISOString().split('T')[0],
+                lastMonthEnd.toISOString().split('T')[0]
+            );
+            
+            const monthName = lastMonth.toLocaleDateString('th-TH', {month: 'long'});
+            return `กำไรสุทธิเดือนที่แล้ว (${monthName}): ${(stats.total_profit || 0).toLocaleString()} บาท (รายได้ ${(stats.total_revenue || 0).toLocaleString()} - ค่าใช้จ่าย ${(stats.total_cost || 0).toLocaleString()})`;
+        }
+
+        // กำไรปีนี้
+        if (questionLower.includes('กำไร') && questionLower.includes('ปีนี้')) {
+            const currentDate = new Date();
+            const firstDay = new Date(currentDate.getFullYear(), 0, 1);
+            const lastDay = new Date(currentDate.getFullYear(), 11, 31);
+            
+            const stats = await this.getHarvestStats(userId,
+                firstDay.toISOString().split('T')[0],
+                lastDay.toISOString().split('T')[0]
+            );
+            
+            const year = currentDate.getFullYear() + 543;
+            return `กำไรปีนี้ (พ.ศ. ${year}): ${(stats.total_profit || 0).toLocaleString()} บาท (รายได้ ${(stats.total_revenue || 0).toLocaleString()} - ค่าใช้จ่าย ${(stats.total_cost || 0).toLocaleString()})`;
+        }
+
+        // กำไรสุทธิ (กรณีทั่วไป)
         if (questionLower.includes('กำไร')) {
             // กำไรทั้งหมด
             if (questionLower.includes('ทั้งหมด')) {
                 const stats = await this.getHarvestStats(userId, '2020-01-01', '2030-12-31');
                 return `กำไรสุทธิทั้งหมด: ${(stats.total_profit || 0).toLocaleString()} บาท (รายได้ ${(stats.total_revenue || 0).toLocaleString()} - ค่าใช้จ่าย ${(stats.total_cost || 0).toLocaleString()})`;
             } else {
-                // กำไรเดือนนี้
+                // กำไรเดือนนี้ (default)
                 const currentDate = new Date();
                 const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
                 const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
